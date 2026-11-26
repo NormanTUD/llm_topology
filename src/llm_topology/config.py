@@ -161,8 +161,10 @@ class PersistenceSummary(BaseModel):
     max_dim: int
     epsilon: float
     betti: list[int]
-    diagrams: list[list[list[float]]]
+    diagrams: list[list[list[float | None]]]
     finite_values: list[float]
+    epsilon_grid: list[float] = Field(default_factory=list)
+    betti_curve: list[list[int]] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 
 

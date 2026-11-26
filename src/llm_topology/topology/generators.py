@@ -401,21 +401,23 @@ def _single_cloud(
     return _embed_orthonormal(intrinsic, spec.ambient_dim, rng)
 
 
-def _replicate(
-    points: np.ndarray,
-    copies: int,
+def _separate_chunks(
+    chunks: list[np.ndarray],
     rng: np.random.Generator,
-) -> tuple[np.ndarray, float]:
-    if copies == 1:
-        return points, 0.0
-    extent = float(np.max(np.linalg.norm(points - points.mean(axis=0), axis=1)))
+) -> np.ndarray:
+    if len(chunks) == 1:
+        return chunks[0]
+    extent = max(
+        float(np.max(np.linalg.norm(chunk - chunk.mean(axis=0), axis=1)))
+        for chunk in chunks
+    )
     separation = max(2.5 * extent, 0.5)
-    direction = _unit_vector(points.shape[1], rng)
-    chunks = []
-    for index in range(copies):
-        shift = direction * separation * (index - (copies - 1) / 2)
-        chunks.append(points + shift)
-    return np.vstack(chunks), separation
+    direction = _unit_vector(chunks[0].shape[1], rng)
+    separated = []
+    for index, chunk in enumerate(chunks):
+        shift = direction * separation * (index - (len(chunks) - 1) / 2)
+        separated.append(chunk + shift)
+    return np.vstack(separated)
 
 
 def _apply_transform(points: np.ndarray, spec: DatasetSpec) -> np.ndarray:
@@ -436,7 +438,10 @@ def _apply_transform(points: np.ndarray, spec: DatasetSpec) -> np.ndarray:
         rz = np.array(
             [[math.cos(az), -math.sin(az), 0], [math.sin(az), math.cos(az), 0], [0, 0, 1]]
         )
-        rotation = rz @ ry @ rx
+        if out.shape[1] == 2:
+            rotation = rz[:2, :2]
+        else:
+            rotation = rz @ ry @ rx
         dim = min(3, out.shape[1])
         out[:, :dim] = out[:, :dim] @ rotation[:dim, :dim].T
 
@@ -495,12 +500,11 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     else:
         counts = np.full(spec.copies, spec.n_points // spec.copies, dtype=int)
         counts[: spec.n_points % spec.copies] += 1
-        chunks: list[np.ndarray] = []
-        for count in counts:
-            chunk = _single_cloud(spec, base_kind, int(count), rng)
-            chunks.append(chunk)
-        separated, _ = _replicate(np.vstack(chunks), spec.copies, rng)
-        points = separated
+        chunks = [
+            _single_cloud(spec, base_kind, int(count), rng)
+            for count in counts
+        ]
+        points = _separate_chunks(chunks, rng)
 
     points = _center(points)
     points = _apply_transform(points, spec)
