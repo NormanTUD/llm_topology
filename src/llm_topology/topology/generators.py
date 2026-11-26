@@ -528,13 +528,24 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     else:
         counts = np.full(spec.copies, spec.n_points // spec.copies, dtype=int)
         counts[: spec.n_points % spec.copies] += 1
-        chunks = [_single_cloud(spec, base_kind, int(count), rng) for count in counts]
+        # One canonical copy is generated and translated. Identical copies keep
+        # persistence intervals aligned, which stabilizes b0=N multi-torus
+        # labels; variation across generated clouds comes from the batch/seed.
+        base_count = int(counts.max())
+        base = _single_cloud(spec, base_kind, base_count, rng)
+        chunks = [base[: int(count)].copy() for count in counts]
         points = _separate_chunks(chunks, rng)
 
     points = _center(points)
     points = _apply_transform(points, spec)
     if not np.all(np.isfinite(points)):
         raise GeneratorError("generated point cloud contains non-finite coordinates")
+    # A similarity normalization keeps the filtration scale comparable across
+    # rotations, stretches, and diffeomorphic warps without changing topology.
+    points = points - points.mean(axis=0, keepdims=True)
+    rms = float(np.sqrt(np.mean(np.sum(points**2, axis=1))))
+    if rms > 1e-12:
+        points = points / rms
 
     structure_name = STRUCTURE_LABELS[
         base_kind if spec.structure is StructureKind.DISJOINT else spec.structure

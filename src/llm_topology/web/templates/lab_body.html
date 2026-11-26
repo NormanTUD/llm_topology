@@ -15,25 +15,16 @@
 
       <div class="tab-pane active" id="train-controls">
         <details class="section" open>
-          <summary>Dataset <span class="summary-note">mixed structures</span></summary>
-          <div class="structure-checks" id="structure-checks"></div>
-          <div class="control-grid">
-            <label class="control"><span>Train samples</span><input type="number" id="n-train" min="4" max="5000" value="64"></label>
-            <label class="control"><span>Val samples</span><input type="number" id="n-val" min="2" max="1000" value="24"></label>
-            <label class="control"><span>Points</span><input type="number" id="n-points-train" min="8" max="512" value="32"></label>
-            <label class="control"><span>Ambient dim</span><input type="number" id="ambient-train" min="2" max="12" value="3"></label>
-            <label class="control"><span>Copies</span><input type="number" id="copies-train" min="1" max="32" value="1"></label>
-            <label class="control"><span>Genus</span><input type="number" id="genus-train" min="1" max="16" value="2"></label>
-            <label class="control"><span>Precision</span><input type="number" id="precision-train" min="1" max="8" value="3"></label>
-            <label class="control"><span>Task mix</span><input type="number" id="task-mix" min="0" max="1" step="0.05" value="0.5"></label>
-            <label class="control"><span>Context</span><input type="number" id="context-train" min="64" max="32768" value="1024"></label>
-            <label class="control"><span>Seed</span><input type="number" id="seed-train" value="0"></label>
-            <label class="control"><span>Filtration</span><select id="method-train"><option value="alpha">Alpha</option><option value="rips">Rips</option></select></label>
-            <label class="control"><span>Field</span><select id="field-train"><option value="Z2">Z2</option><option value="Z3">Z3 (Q-proxy)</option></select></label>
-            <label class="control"><span>Max homology dim</span><input type="number" id="maxdim-train" min="0" max="6" value="2"></label>
-            <label class="control"><span>Augment strength</span><input type="number" id="augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
-            <label class="control checkbox"><input type="checkbox" id="augment-train" checked><span>Random transforms</span></label>
+          <summary>Dataset <span class="summary-note">saved from Data Studio</span></summary>
+          <label class="control span-2">
+            <span>Saved dataset</span>
+            <select id="dataset-select"><option value="">No dataset selected</option></select>
+          </label>
+          <div class="dataset-actions">
+            <button type="button" class="ghost small" id="refresh-datasets">refresh</button>
+            <button type="button" class="ghost small" id="go-data-studio">build in Data Studio</button>
           </div>
+          <div class="dataset-meta" id="dataset-meta">No dataset selected. Build one in Data Studio first.</div>
         </details>
 
         <details class="section">
@@ -47,6 +38,7 @@
             <label class="control"><span>Activation</span><select id="activation"><option value="silu">SiLU</option><option value="gelu">GELU</option><option value="relu">ReLU</option></select></label>
             <label class="control"><span>Norm</span><select id="norm-placement"><option value="pre">Pre-LN</option><option value="post">Post-LN</option></select></label>
             <label class="control"><span>Positions</span><select id="position-encoding"><option value="learned">Learned</option><option value="rope">RoPE</option><option value="none">None</option></select></label>
+            <label class="control"><span>Context</span><input type="number" id="context-train" min="64" max="32768" value="1024"></label>
             <label class="control"><span>Init</span><select id="init-scheme"><option value="normal">Normal</option><option value="xavier_uniform">Xavier uniform</option><option value="xavier_normal">Xavier normal</option><option value="orthogonal">Orthogonal</option><option value="uniform">Uniform</option><option value="zero">Zero</option></select></label>
             <label class="control"><span>Init std</span><input type="number" id="init-std" step="0.001" min="0.0001" value="0.02"></label>
             <label class="control"><span>Init seed</span><input type="number" id="init-seed" value="0"></label>

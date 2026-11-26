@@ -15,6 +15,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from ..config import StructureKind
+from ..datasets import STORE, DatasetStoreError
 from ..pipeline import project_for_display
 from ..tokenizer import NumericTokenizer, parse_target_groups
 from ..topology.filtration import compute_persistence
@@ -93,6 +94,16 @@ def _pad_rows(rows: list[list[int]], pad_id: int) -> torch.Tensor:
     return tensor
 
 
+def _group_by_name(schema, groups, name: str):
+    try:
+        index = schema.names.index(name)
+    except ValueError:
+        return None
+    if groups is None or index >= len(groups):
+        return None
+    return groups[index]
+
+
 def _parse_generated_points(text: str, ambient_dim: int) -> list[list[float]]:
     cleaned = text.replace("<eos>", "").replace("<pad>", "").replace("<endoftext>", "").strip()
     points: list[list[float]] = []
@@ -127,7 +138,26 @@ class Trainer:
         self.spec = spec
         self.tokenizer = tokenizer
         self.checkpoint_dir = checkpoint_dir
-        self.bundle = bundle or build_dataset(tokenizer, spec.data)
+        if bundle is not None:
+            self.bundle = bundle
+        elif spec.dataset_id:
+            try:
+                self.bundle = STORE.load(spec.dataset_id)
+            except DatasetStoreError as exc:
+                raise TrainingError(str(exc)) from exc
+            if self.bundle.tokenizer.tokens != tokenizer.tokens:
+                raise TrainingError("saved dataset tokenizer does not match this codebase")
+        else:
+            self.bundle = build_dataset(tokenizer, spec.data)
+        max_example_len = max(
+            (example.seq_len for example in [*self.bundle.train, *self.bundle.val]),
+            default=0,
+        )
+        if max_example_len > spec.model.max_seq_len:
+            raise TrainingError(
+                f"dataset needs context {max_example_len}, model context is "
+                f"{spec.model.max_seq_len}. Increase the model context or rebuild the dataset."
+            )
         self.device = resolve_device(spec.training.device)
         self.pad_id = tokenizer.pad_id
         self.eos_id = tokenizer.eos_id
@@ -404,7 +434,9 @@ class Trainer:
                 .replace("<pad>", "")
                 .strip()
             )
-            generated_points = _parse_generated_points(generated_text, self.spec.data.ambient_dim)
+            generated_points = _parse_generated_points(
+                generated_text, self.bundle.data_spec.ambient_dim
+            )
             generated_projection, _ = (
                 project_for_display(generated_points) if generated_points else ([], "")
             )
@@ -426,6 +458,9 @@ class Trainer:
                     "generated_projection": generated_projection,
                     "generated_betti": generated_betti,
                     "true_text": example.target_text,
+                    "true_filtration": _group_by_name(
+                        self.schema, example.target_groups, "filtration"
+                    ),
                 }
             )
         self.model.train()
@@ -437,7 +472,7 @@ class Trainer:
             {
                 "model_state": self.model.state_dict(),
                 "model_spec": self.spec.model.model_dump(mode="json"),
-                "data_spec": self.spec.data.model_dump(mode="json"),
+                "data_spec": self.bundle.data_spec.model_dump(mode="json"),
                 "train_spec": self.spec.training.model_dump(mode="json"),
                 "vocab": self.tokenizer.tokens,
                 "max_dim": self.bundle.max_dim,

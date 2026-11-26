@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,9 +19,12 @@ from ..config import (
     FiltrationMethod,
     StructureKind,
     TargetSchema,
+    TransformSpec,
     default_target_blocks,
     optional_target_blocks,
 )
+from ..datasets import STORE as DATASET_STORE
+from ..datasets import DatasetStoreError
 from ..model.config import AnalysisSpec, DataBuildSpec, ModelSpec, TrainConfig, TrainingSpec
 from ..pipeline import PipelineError, generate_dataset
 from ..tokenizer import (
@@ -92,10 +96,33 @@ class CatalogResponse(BaseModel):
     analysis_defaults: dict[str, object]
 
 
+class DatasetCreateRequest(BaseModel):
+    name: str = Field(default="dataset", min_length=1, max_length=80)
+    data_spec: DataBuildSpec
+
+
 class BatchGenerateRequest(BaseModel):
     spec: DatasetSpec = Field(default_factory=DatasetSpec)
     count: int = Field(default=6, ge=1, le=24)
+    mode: str = Field(default="single", pattern="^(single|mix)$")
     structures: list[StructureKind] | None = None
+    vary_transform: bool = False
+    variation_strength: float = Field(default=0.35, ge=0, le=1)
+
+
+def _random_batch_transform(seed: int, strength: float) -> TransformSpec:
+    rng = np.random.default_rng(seed)
+    return TransformSpec(
+        rotation_deg=tuple(rng.uniform(-180, 180, size=3).tolist()),
+        stretch=tuple(rng.uniform(1 - 0.2 * strength, 1 + 0.2 * strength, size=3).tolist()),
+        twist=float(rng.uniform(-0.65, 0.65) * strength),
+        shear=tuple((rng.uniform(-0.4, 0.4, size=3) * strength).tolist()),
+        bend=float(rng.uniform(-0.45, 0.45) * strength),
+        warp=float(rng.uniform(-0.4, 0.4) * strength),
+        noise=0.0,
+        permute=True,
+        seed=seed + 7,
+    )
 
 
 def _catalog() -> CatalogResponse:
@@ -182,12 +209,28 @@ async def generate(spec: DatasetSpec) -> DatasetResponse:
 async def generate_batch(payload: BatchGenerateRequest) -> BatchDatasetResponse:
     items: list[DatasetResponse] = []
     warnings: list[str] = []
-    structures = payload.structures or [payload.spec.structure]
+    if payload.mode == "mix":
+        if not payload.structures:
+            raise HTTPException(
+                status_code=422,
+                detail="mixed batch mode requires at least one structure",
+            )
+        structures = payload.structures
+    else:
+        structures = [payload.spec.structure]
     for index in range(payload.count):
+        structure = structures[index % len(structures)]
+        seed = payload.spec.seed + index
+        transform = (
+            _random_batch_transform(seed, payload.variation_strength)
+            if payload.vary_transform
+            else payload.spec.transform
+        )
         spec = payload.spec.model_copy(
             update={
-                "seed": payload.spec.seed + index,
-                "structure": structures[index % len(structures)],
+                "seed": seed,
+                "structure": structure,
+                "transform": transform,
             }
         )
         try:
@@ -198,7 +241,13 @@ async def generate_batch(payload: BatchGenerateRequest) -> BatchDatasetResponse:
         raise HTTPException(
             status_code=422, detail="; ".join(warnings) or "batch generation failed"
         )
-    return BatchDatasetResponse(items=items, warnings=warnings, count=len(items))
+    return BatchDatasetResponse(
+        items=items,
+        warnings=warnings,
+        count=len(items),
+        mode=payload.mode,
+        structures=[structure.value for structure in structures],
+    )
 
 
 @app.post("/api/tokenize", response_model=TokenizeResponse)
@@ -235,6 +284,29 @@ async def parse_targets(payload: ParseTargetRequest) -> ParseTargetResponse:
         target_text=canonical,
         target_schema=payload.target_schema,
     )
+
+
+@app.get("/api/datasets")
+async def list_datasets() -> list[dict[str, object]]:
+    return DATASET_STORE.list()
+
+
+@app.post("/api/datasets")
+async def create_dataset(payload: DatasetCreateRequest) -> dict[str, object]:
+    try:
+        return DATASET_STORE.save(payload.name, payload.data_spec)
+    except DatasetStoreError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.get("/api/datasets/{dataset_id}")
+async def get_dataset(dataset_id: str) -> dict[str, object]:
+    try:
+        return DATASET_STORE.get_meta(dataset_id)
+    except DatasetStoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @app.post("/api/train/start")
@@ -284,6 +356,7 @@ async def predict_job(job_id: str, payload: BatchGenerateRequest) -> dict[str, o
             payload.spec,
             count=payload.count,
             structures=payload.structures,
+            mode=payload.mode,
         )
     except JobError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

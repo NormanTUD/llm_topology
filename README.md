@@ -55,6 +55,20 @@ Danach:
 - `http://127.0.0.1:8000/lab` öffnet Model Lab und Training,
 - `http://127.0.0.1:8000/lab#interpret` öffnet die Probe- und Heatmap-Ansicht.
 
+Alle drei Ansichten sind Tabs derselben Single-Page-App und wechseln ohne
+Reload.
+
+Workflow:
+
+1. Im Data Studio Punktwolken generieren und die Rezeptur prüfen.
+2. Unten im Data Studio `Build & save dataset` ausführen. Das erzeugt
+   `datasets/ds-NNNN/` mit Train-/Val-Beispielen.
+3. Im Model Lab das gespeicherte Dataset auswählen und trainieren. Die
+   Validierungswolken können im Dataset Builder separat transformiert werden.
+4. Während des Trainings Live-Loss, Validierungspaare und Vorhersagen sehen.
+5. Nach dem Training `Run probes & maps` oder frische Multi-Cloud-Predictions
+   starten.
+
 Ein Trainingslauf im Model Lab startet im Hintergrund. Die Oberfläche pollt
 den Status, zeigt Live-Loss, Validierungsmetriken und generierte Samples und
 kann den Lauf stoppen. Nach dem Training startet `Run probes & maps` die
@@ -78,6 +92,11 @@ Data Foundation:
 - automatische Wahl eines Filtrationsskalenpunkts,
 - Z2 und Z3 als Q-Proxy,
 - Batch-Galerie mit mehreren Punktwolken,
+- Batch-Modus `single` oder `mix` mit expliziter Strukturauswahl,
+- Live-Update der Geometrie bei Regleränderungen,
+- Trainingsdatensatz-Erzeugung nach `datasets/ds-NNNN/`,
+- getrennte Train-/Val-Augmentierung: auch Validierungswolken können
+  rotiert, gestreckt, getwistet, gebogen und gewarpt werden,
 - Temml-Gleichungsansicht,
 - pytest-Suite und GitHub-Actions-CI.
 
@@ -93,6 +112,8 @@ Model Lab:
 - Live-Training im Browser mit Polling, Batch-Loss-Kurven, Validierungspaaren
   (Inputwolke, wahre vs. vorhergesagte Betti-Zahlen) und Samples,
 - Start/Stop als ein umschaltender Button,
+- Auswahl gespeicherter Datasets statt doppelter Dataset-Regler,
+- getrennte Train-/Val-Transformationen im Dataset Builder,
 - Experimentordner `runs/exp-NNNN/` mit Checkpoints, Job-Snapshot und History,
 - CLI-Logging für Start, Epochen, Batches, Validierung und Checkpoints.
 
@@ -117,7 +138,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **80 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **91 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -176,7 +197,9 @@ Zwei disjunkte Tori: `(2,4,2)`. Fünf disjunkte Genus-2-Flächen: `(5,20,5)`.
 
 "5 Doppeltori" wird als fünf getrennte Genus-2-Komponenten umgesetzt. Eine
 einzelne zusammenhängende Genus-2-Fläche entsteht über `genus=2` und
-`copies=1`.
+`copies=1`. Für `structure=torus` und `copies=N` gilt entsprechend
+`b0=N`, `b1=2N`, `b2=N`; alle Kopien bleiben Tori. Für stabile PH-Labels
+sollten es etwa 400 Punkte pro Kopie sein.
 
 ## Zielformat
 
@@ -316,6 +339,13 @@ Heuristik-Start:
 Das ist kein universeller topologischer Schätzer. Die GUI erlaubt deshalb
 jederzeit manuelles `epsilon`.
 
+**Auto- oder manuelles Epsilon:** Im Data Studio kann `epsilon` automatisch
+gewählt oder explizit gesetzt werden. Der Dataset Builder übernimmt diese
+Wahl. Bei `auto` variiert epsilon pro Punktwolke; das Modell muss den Wert
+als Teil der `filtration`-Zielgruppe mitlernen. Bei manuellem epsilon ist der
+Wert für den Datensatz fixiert. Die Trainings- und Prediction-Ansichten
+zeigen wahres und vorhergesagtes epsilon nebeneinander.
+
 **Koeffizienten:** Z2 ist der Default. Z3 dient als Q-ähnlicher
 Vergleichskörper, ist aber **keine exakte Q-Berechnung**. Für orientierbare
 Flächen sind die Werte gleich; für nicht-orientierbare Flächen zeigt Z3 das
@@ -394,16 +424,20 @@ serverseitig gespeichert und nach F5 wiederhergestellt.
 1. **Data Studio**
    - Batch-Galerie mit mehreren Punktwolken,
    - Auswahl einer Wolke für die Detailansicht,
+   - Batch-Modus `single`/`mix`, Live-Update, Strukturauswahl,
    - Strukturkatalog, Transformationen inklusive Shear/Bend/Warp,
    - kanonische Referenzwolke als Ghost-Overlay (nicht im Modell-Input),
-   - Filtration und Zielgruppen,
+   - Topology Guard: theoretische vs. berechnete Betti-Zahlen,
+   - Trainingsdatensatz-Erzeugung,
+   - Filtration und Zielgruppen mit Auto- oder manuellem Epsilon,
    - 3D-Punktwolke, Persistenzdiagramm mit Referenz-Betti, Betti-Kurven,
    - theoretische vs. berechnete Betti-Zahlen,
    - Zielstring, Modell-Input und Tokenstrom,
    - Temml-Gleichungen mit Live-Werten.
 
 2. **Model Lab**
-   - Dataset-, Modell- und Trainingsregler,
+   - Auswahl eines gespeicherten Datasets,
+   - Modell- und Trainingsregler,
    - Start/Stop-Toggle, Live-Batch-Loss, Validierungsmetriken,
    - Live-Paare aus Inputwolke, wahrem Ziel und Modellvorhersage,
    - generierte Punktwolken bzw. generierte PH-Betti,
@@ -436,6 +470,7 @@ app.py                         uv-Bootstrap und Serverstart
 pyproject.toml                  uv-Projekt
 src/llm_topology/
   config.py                     Pydantic-Konfigurationen
+  datasets.py                   Persistente Train-/Val-Datasets
   tokenizer.py                  Ziffern-/Zahlen-Tokenizer
   pipeline.py                   Generate -> PH -> Ziele -> Sequenz
   topology/
@@ -468,8 +503,11 @@ CI führt Ruff, Formatcheck und pytest aus. PyTorch wird über den CPU-Index
 installiert, damit der lokale Bootstrap ohne CUDA-Abhängigkeiten bleibt.
 
 Trainingsartefakte liegen unter `runs/exp-NNNN/` (`best.pt`, `last.pt`,
-`history.json`, `job.json`, optional `analysis.json`). `runs/` und `state/`
-sind gitignored. Der UI-Zustand wird unter `state/ui_state.json` gespeichert.
+`history.json`, `job.json`, optional `analysis.json`). Datasets liegen unter
+`datasets/ds-NNNN/` (`meta.json`, `data.json`) und enthalten die Rezeptur
+inklusive separater Train-/Val-Augmentierung und Filtrationsmodus.
+`runs/`, `datasets/` und `state/` sind gitignored. Der UI-Zustand wird unter
+`state/ui_state.json` gespeichert.
 
 ## Grenzen und Risiken
 

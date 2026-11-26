@@ -7,7 +7,7 @@
 - **Phase 1:** abgeschlossen (Custom Transformer + Training)
 - **Phase 2:** abgeschlossen (Probes + Heatmaps + Latent-PCA)
 - **Status:** Browser-GUI mit Data Studio, Model Lab und Interpretability
-- **Letzter Testlauf:** 80 Tests bestanden, Ruff und Formatierung sauber
+- **Letzter Testlauf:** 91 Tests bestanden, Ruff und Formatierung sauber
 - **Naechster Meilenstein:** OOD-/Invarianzmatrix, Ablation, Activation Patching
 
 Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
@@ -91,6 +91,16 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Single-Page-App ohne Reload
 - [x] Server-seitiger UI-Zustand + F5-Restore
 - [x] Referenzwolke nur fuer die GUI, nicht fuer das Modell
+- [x] Batch-Modus single/mix mit expliziter Strukturauswahl
+- [x] Live-Update der Geometrie-Regler
+- [x] Persistente Datasets `datasets/ds-NNNN` + Auswahl im Model Lab
+- [x] Doppelte Dataset-Regler im Model Lab entfernt
+- [x] Augmentierungs-TypeError behoben und getestet
+- [x] Topology Guard und Normalisierung fuer stabile Filtrationsskalen
+- [x] Getrennte Train-/Val-Transformationen fuer gespeicherte Datasets
+- [x] Mehrere Tori/Kopien mit stabilen b0-Labels
+- [x] Auto- und manuelles Epsilon in Dataset-Erzeugung
+- [x] Filtration wird als Zielgruppe mitgelernt und in Predictions angezeigt
 
 ## Phase 2 - Interpretierbarkeit
 

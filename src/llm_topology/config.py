@@ -189,6 +189,8 @@ class DatasetResponse(BaseModel):
     reference_projection: list[list[float]] = Field(default_factory=list)
     reference_structure_name: str | None = None
     reference_betti: list[int] = Field(default_factory=list)
+    topology_guard: bool = False
+    topology_guard_label: str = "unknown"
     warnings: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
 
@@ -197,3 +199,5 @@ class BatchDatasetResponse(BaseModel):
     items: list[DatasetResponse]
     warnings: list[str] = Field(default_factory=list)
     count: int
+    mode: str = "single"
+    structures: list[str] = Field(default_factory=list)

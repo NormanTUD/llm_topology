@@ -77,6 +77,62 @@ def test_reference_cloud_is_separate_from_model_sequence() -> None:
     assert response.sequence.startswith("<") is False or response.sequence
 
 
+def test_multi_torus_components_and_topology_guard() -> None:
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.TORUS,
+            n_points=1200,
+            copies=3,
+            ambient_dim=3,
+            seed=1,
+            filtration=FiltrationSpec(method=FiltrationMethod.ALPHA, max_dim=2),
+        )
+    )
+    assert response.sample.theoretical_betti == [3, 6, 3]
+    assert response.sample.n_components == 3
+    assert response.sample.genus == 3
+    assert response.topology_guard is True
+
+
+def test_manual_filtration_epsilon_is_in_targets() -> None:
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.CIRCLE,
+            n_points=120,
+            filtration=FiltrationSpec(method=FiltrationMethod.ALPHA, epsilon=0.5),
+        )
+    )
+    assert response.persistence.epsilon == 0.5
+    assert response.target_groups[-1][2] == 0.5
+
+
+def test_auto_filtration_epsilon_is_reported_in_targets() -> None:
+    response = generate_dataset(DatasetSpec(structure=StructureKind.CIRCLE, n_points=120))
+    assert response.persistence.epsilon > 0
+    assert response.target_groups[-1][2] == response.persistence.epsilon
+
+
+def test_augmented_generation_does_not_crash() -> None:
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.TORUS,
+            n_points=40,
+            seed=11,
+            transform={
+                "rotation_deg": [10, 20, 30],
+                "stretch": [1.1, 0.9, 1.0],
+                "twist": 0.2,
+                "shear": [0.1, -0.1, 0.05],
+                "bend": 0.2,
+                "warp": 0.15,
+                "seed": 3,
+            },
+        )
+    )
+    assert response.sample.n_points == 40
+    assert response.topology_guard in {True, False}
+
+
 def test_optional_target_groups() -> None:
     schema = TargetSchema(
         blocks=[

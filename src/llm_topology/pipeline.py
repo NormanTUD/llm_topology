@@ -65,6 +65,7 @@ def generate_dataset(spec: DatasetSpec) -> DatasetResponse:
 
     projection, projection_method = project_for_display(sample.points)
     reference_projection, reference_name, reference_betti = _reference_cloud(spec, sample)
+    guard = list(sample.theoretical_betti[: len(persistence.betti)]) == list(persistence.betti)
 
     return DatasetResponse(
         sample=sample,
@@ -78,6 +79,8 @@ def generate_dataset(spec: DatasetSpec) -> DatasetResponse:
         reference_projection=reference_projection,
         reference_structure_name=reference_name,
         reference_betti=reference_betti,
+        topology_guard=guard,
+        topology_guard_label="match" if guard else "differs",
         warnings=warnings,
         notes=notes,
     )

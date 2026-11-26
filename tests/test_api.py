@@ -74,7 +74,37 @@ def test_generate_batch() -> None:
     body = response.json()
     assert body["count"] == 3
     assert len(body["items"]) == 3
+    assert body["mode"] == "single"
+    assert {item["sample"]["structure"] for item in body["items"]} == {"circle"}
     assert body["items"][0]["target_groups"]
+
+
+def test_generate_batch_mix_requires_and_uses_structures() -> None:
+    spec = {
+        "structure": "circle",
+        "n_points": 30,
+        "ambient_dim": 3,
+        "seed": 2,
+        "filtration": {"method": "alpha", "max_dim": 2, "epsilon": 0.5},
+    }
+    missing = client.post("/api/generate/batch", json={"spec": spec, "count": 2, "mode": "mix"})
+    assert missing.status_code == 422
+    response = client.post(
+        "/api/generate/batch",
+        json={
+            "spec": spec,
+            "count": 2,
+            "mode": "mix",
+            "structures": ["circle", "sphere"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["mode"] == "mix"
+    assert [item["sample"]["structure"] for item in body["items"]] == [
+        "circle",
+        "sphere",
+    ]
 
 
 def test_lab_page() -> None:
@@ -91,6 +121,29 @@ def test_ui_state_roundtrip() -> None:
     fetched = client.get("/api/ui-state")
     assert fetched.status_code == 200
     assert fetched.json()["test_marker"] == "ok"
+
+
+def test_dataset_api_roundtrip(monkeypatch, tmp_path) -> None:
+    from llm_topology.web.main import DATASET_STORE
+
+    monkeypatch.setattr(DATASET_STORE, "root", tmp_path / "datasets")
+    payload = {
+        "name": "tiny-api-set",
+        "data_spec": {
+            "structures": ["circle"],
+            "n_train": 4,
+            "n_val": 2,
+            "n_points": 8,
+            "max_seq_len": 512,
+            "precision": 2,
+            "augment": False,
+        },
+    }
+    response = client.post("/api/datasets", json=payload)
+    assert response.status_code == 200, response.text
+    meta = response.json()
+    assert meta["train_count"] == 4
+    assert any(item["id"] == meta["id"] for item in client.get("/api/datasets").json())
 
 
 def test_training_routes_report_errors() -> None:

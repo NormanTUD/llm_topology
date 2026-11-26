@@ -6,7 +6,11 @@ const state = {
   batch: [],
   selected: 0,
   batchWarnings: [],
+  batchMode: "single",
+  batchStructures: [],
   equationValues: {},
+  generateToken: 0,
+  abortController: null,
 };
 
 const COLORS = ["#5eead4", "#fb923c", "#a78bfa", "#f472b6"];
@@ -122,6 +126,7 @@ async function loadCatalog() {
   $("#phase-chip").textContent = state.catalog.phase;
   $("#projection-method").textContent = "—";
   renderTargetBlocks();
+  renderBatchStructures();
   syncStructureVisibility();
   syncMethodVisibility();
 }
@@ -138,13 +143,69 @@ function applyTargetBlockState(names) {
   });
 }
 
+function selectedBatchStructures() {
+  return $$(".batch-structure:checked").map((input) => input.value);
+}
+
+function applyBatchStructures(values) {
+  if (!Array.isArray(values) || !values.length) return;
+  const selected = new Set(values);
+  $$(".batch-structure").forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+function renderBatchStructures() {
+  const container = $("#batch-structure-checks");
+  if (!container) return;
+  container.innerHTML = "";
+  const defaults = new Set(["circle", "sphere", "torus", "genus_surface"]);
+  for (const structure of state.catalog.structures) {
+    if (structure.value === "disjoint") continue;
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "batch-structure";
+    checkbox.value = structure.value;
+    checkbox.checked = defaults.has(structure.value);
+    const text = document.createElement("span");
+    text.textContent = structure.label;
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    container.appendChild(label);
+  }
+}
+
+function syncBatchMode() {
+  const mode = $("#batch-mode").value;
+  const mix = mode === "mix";
+  $("#batch-structure-wrap").classList.toggle("hidden", !mix);
+  $("#structure-select").disabled = mix;
+  if (mix && !selectedBatchStructures().length) {
+    applyBatchStructures(["circle", "sphere", "torus", "genus_surface"]);
+  }
+}
+
+function syncBatchStructureAvailability() {
+  const ambient = clampInt($("#ambient-dim").value, 2, 64, 3);
+  $$(".batch-structure").forEach((checkbox) => {
+    const structure = state.catalog.structures.find((item) => item.value === checkbox.value);
+    const unavailable = structure && structure.needs_ambient > ambient;
+    checkbox.disabled = Boolean(unavailable);
+    if (unavailable) checkbox.checked = false;
+  });
+}
+
 function persistDataState() {
   saveUIState({
     dataForm: collectById("#generate-form"),
     targetBlocks: selectedTargetNames(),
+    datasetForm: collectById("#dataset-builder"),
     lastBatch: state.batch,
     selected: state.selected,
     batchWarnings: state.batchWarnings,
+    batchMode: $("#batch-mode")?.value || state.batchMode,
+    batchStructures: selectedBatchStructures(),
   });
 }
 
@@ -280,37 +341,60 @@ function setLoading(loading) {
   $(".btn-label").textContent = loading ? "Computing filtration…" : "Generate point cloud";
 }
 
-async function generate() {
+async function generate({ live = false } = {}) {
   hideError();
   setLoading(true);
-  setStatus("generating");
+  setStatus(live ? "updating preview" : "generating");
+  const token = ++state.generateToken;
   try {
     const spec = buildSpec();
     const count = clampInt($("#batch-count").value, 1, 24, 6);
-    const mix = $("#mix-structures").checked;
+    const mode = $("#batch-mode").value;
     let structures = null;
-    if (mix) {
-      structures = state.catalog.structures
-        .filter((structure) => structure.value !== "disjoint")
-        .filter((structure) => structure.needs_ambient <= spec.ambient_dim)
-        .map((structure) => structure.value);
+    if (mode === "mix") {
+      structures = selectedBatchStructures();
+      const available = new Set(
+        state.catalog.structures
+          .filter((structure) => structure.needs_ambient <= spec.ambient_dim)
+          .map((structure) => structure.value)
+      );
+      structures = structures.filter((value) => available.has(value));
+      if (!structures.length) {
+        throw new Error("Select at least one structure compatible with the ambient dimension.");
+      }
     }
+    const previousSelected = state.selected;
+    state.abortController?.abort();
+    const controller = new AbortController();
+    state.abortController = controller;
     const data = await fetchJSON("/api/generate/batch", {
       method: "POST",
-      body: JSON.stringify({ spec, count, structures }),
+      signal: controller.signal,
+      body: JSON.stringify({
+        spec,
+        count,
+        mode,
+        structures,
+        vary_transform: $("#vary-transform").checked,
+        variation_strength: Math.max(0, Math.min(1, numberValue("variation_strength", 0.35))),
+      }),
     });
+    if (token !== state.generateToken) return;
     state.batch = data.items;
     state.batchWarnings = data.warnings || [];
-    state.selected = 0;
+    state.batchMode = data.mode || mode;
+    state.batchStructures = data.structures || structures || [];
+    state.selected = Math.min(previousSelected, state.batch.length - 1);
     renderGallery(state.batch);
     renderSelection();
     persistDataState();
     setStatus("ready");
   } catch (error) {
+    if (error.name === "AbortError") return;
     showError(error.message || String(error));
     toast(error.message || "Generation failed", true);
   } finally {
-    setLoading(false);
+    if (token === state.generateToken) setLoading(false);
   }
 }
 
@@ -353,6 +437,10 @@ function renderGallery(items) {
   const container = $("#cloud-gallery");
   container.innerHTML = "";
   $("#gallery-count").textContent = `${items.length} cloud${items.length === 1 ? "" : "s"}`;
+  const recipe = state.batchMode === "mix"
+    ? `mix: ${(state.batchStructures || []).join(", ")}`
+    : `single: ${items[0]?.sample?.structure_name || "cloud"}`;
+  $("#batch-recipe").textContent = recipe.length > 54 ? `${recipe.slice(0, 51)}…` : recipe;
   items.forEach((item, index) => {
     const card = document.createElement("button");
     card.type = "button";
@@ -428,6 +516,12 @@ function renderMetrics(data) {
   $("#metric-theory").textContent = `(${sample.theoretical_betti.join(", ")})`;
   $("#metric-ph").textContent = `(${persistence.betti.join(", ")})`;
   $("#metric-field").textContent = `${persistence.field} · ${persistence.method}`;
+  const guard = $("#metric-guard");
+  guard.textContent = data.topology_guard ? "match" : "differs";
+  guard.style.color = data.topology_guard ? "var(--cyan)" : "var(--red)";
+  $("#metric-guard-note").textContent = data.topology_guard
+    ? "theoretical = computed PH"
+    : "finite sample / filtration scale";
   $("#metric-epsilon").textContent = Number(persistence.epsilon).toFixed(4);
   $("#metric-epsilon-note").textContent = "auto-selected filtration scale";
   $("#metric-structure").textContent = sample.structure_name;
@@ -785,6 +879,81 @@ async function copyText(text, label) {
   }
 }
 
+function structuresForAmbient(structures, ambient) {
+  const available = new Set(
+    state.catalog.structures
+      .filter((structure) => structure.needs_ambient <= ambient)
+      .map((structure) => structure.value)
+  );
+  return structures.filter((value) => available.has(value));
+}
+
+async function buildTrainingDataset() {
+  clearError();
+  const button = $("#build-dataset");
+  button.disabled = true;
+  button.classList.add("loading");
+  button.querySelector(".btn-label").textContent = "Building dataset…";
+  try {
+    const base = buildSpec();
+    const mode = $("#batch-mode").value;
+    let structures = mode === "mix" ? selectedBatchStructures() : [base.structure];
+    structures = structuresForAmbient(structures, base.ambient_dim);
+    if (!structures.length) {
+      throw new Error("No compatible structure selected for this dataset.");
+    }
+    const filtration = { ...base.filtration };
+    const dataSpec = {
+      structures,
+      n_train: clampInt($("#dataset-n-train").value, 4, 5000, 48),
+      n_val: clampInt($("#dataset-n-val").value, 2, 1000, 16),
+      n_points: base.n_points,
+      ambient_dim: base.ambient_dim,
+      copies: base.copies,
+      genus: base.genus,
+      precision: clampInt($("#dataset-precision").value, 1, 8, 3),
+      max_seq_len: clampInt($("#dataset-context").value, 64, 32768, 1024),
+      task_mix: Math.max(0, Math.min(1, numberValue("dataset-task-mix", 0.5))),
+      augment: $("#dataset-augment").checked,
+      augment_strength: Math.max(0, Math.min(1, numberValue("dataset-augment-strength", 0.35))),
+      val_augment: $("#dataset-val-augment").checked,
+      val_augment_strength: Math.max(0, Math.min(1, numberValue("dataset-val-augment-strength", 0.35))),
+      seed: base.seed,
+      filtration,
+      target_schema: base.target_schema,
+    };
+    const meta = await fetchJSON("/api/datasets", {
+      method: "POST",
+      body: JSON.stringify({
+        name: $("#dataset-name").value || "topology-set",
+        data_spec: dataSpec,
+      }),
+    });
+    $("#dataset-status").textContent = `saved ${meta.id} · ${meta.train_count}/${meta.val_count}`;
+    $("#dataset-status").style.color = "var(--cyan)";
+    window.dispatchEvent(new CustomEvent("llm-datasets-changed"));
+    toast(`Dataset ${meta.id} saved`);
+  } catch (error) {
+    $("#dataset-status").textContent = "build failed";
+    $("#dataset-status").style.color = "var(--red)";
+    showError(error.message);
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("loading");
+    button.querySelector(".btn-label").textContent = "Build & save dataset";
+  }
+}
+
+let liveTimer = null;
+function scheduleLiveGenerate() {
+  if (!$("#live-preview")?.checked) return;
+  window.clearTimeout(liveTimer);
+  liveTimer = window.setTimeout(() => {
+    generate({ live: true });
+  }, 750);
+}
+
 async function boot() {
   renderEquations();
   try {
@@ -801,11 +970,22 @@ async function boot() {
   }
   const saved = await loadUIState();
   applyById(saved.dataForm || {});
+  applyById(saved.datasetForm || {});
   applyTargetBlockState(saved.targetBlocks);
+  applyBatchStructures(saved.batchStructures);
   syncStructureVisibility();
+  syncBatchMode();
+  syncBatchStructureAvailability();
   syncMethodVisibility();
   syncEpsilonVisibility();
   $("#structure-select").addEventListener("change", syncStructureVisibility);
+  $("#ambient-dim").addEventListener("input", syncBatchStructureAvailability);
+  $("#ambient-dim").addEventListener("change", syncBatchStructureAvailability);
+  $("#batch-mode").addEventListener("change", () => {
+    syncBatchMode();
+    persistDataState();
+    scheduleLiveGenerate();
+  });
   $("#method-select").addEventListener("change", syncMethodVisibility);
   $("#auto-epsilon").addEventListener("change", syncEpsilonVisibility);
   $("#max-dim").addEventListener("change", renderTargetBlocks);
@@ -830,13 +1010,23 @@ async function boot() {
     }
   });
   const form = $("#generate-form");
-  form.addEventListener("input", persistDataState);
-  form.addEventListener("change", persistDataState);
-  $("#target-blocks").addEventListener("change", persistDataState);
+  const onControlChange = () => {
+    persistDataState();
+    scheduleLiveGenerate();
+  };
+  form.addEventListener("input", onControlChange);
+  form.addEventListener("change", onControlChange);
+  $("#target-blocks").addEventListener("change", onControlChange);
+  $("#dataset-builder").addEventListener("input", persistDataState);
+  $("#dataset-builder").addEventListener("change", persistDataState);
+  $("#batch-structure-checks").addEventListener("change", onControlChange);
+  $("#build-dataset").addEventListener("click", buildTrainingDataset);
   if (saved.lastBatch && Array.isArray(saved.lastBatch) && saved.lastBatch.length) {
     state.batch = saved.lastBatch;
     state.selected = Number(saved.selected) || 0;
     state.batchWarnings = saved.batchWarnings || [];
+    state.batchMode = saved.batchMode || "single";
+    state.batchStructures = saved.batchStructures || [];
     renderGallery(state.batch);
     renderSelection();
     setStatus("restored");

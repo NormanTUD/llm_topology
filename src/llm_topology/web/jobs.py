@@ -120,7 +120,9 @@ class TrainingJob:
                     "val": len(trainer.bundle.val),
                     "skipped": trainer.bundle.skipped,
                     "max_dim": trainer.bundle.max_dim,
-                    "structures": [structure.value for structure in self.spec.data.structures],
+                    "structures": [
+                        structure.value for structure in trainer.bundle.data_spec.structures
+                    ],
                 },
             )
 
@@ -271,6 +273,7 @@ class JobManager:
         *,
         count: int,
         structures: list[StructureKind] | None = None,
+        mode: str = "single",
     ) -> dict[str, Any]:
         job = self.get(job_id)
         checkpoint = job.best_checkpoint
@@ -285,7 +288,7 @@ class JobManager:
         data_spec = DataBuildSpec.model_validate(checkpoint_data["data_spec"])
         schema = data_spec.target_schema
         max_new_tokens = int(checkpoint_data["train_spec"].get("max_new_tokens", 64))
-        chosen = structures or [spec.structure]
+        chosen = structures if mode == "mix" and structures else [spec.structure]
         items: list[dict[str, Any]] = []
         warnings: list[str] = []
         for index in range(count):

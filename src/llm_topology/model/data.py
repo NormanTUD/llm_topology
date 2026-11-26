@@ -61,16 +61,15 @@ def _pad(values: list[float], size: int) -> list[float]:
     return values + [0.0] * (size - len(values))
 
 
-def _random_transform(spec: DataBuildSpec, seed: int) -> TransformSpec:
-    if not spec.augment:
+def _random_transform(seed: int, strength: float) -> TransformSpec:
+    if strength <= 0:
         return TransformSpec(seed=seed)
     rng = np.random.default_rng(seed)
-    strength = spec.augment_strength
     return TransformSpec(
         rotation_deg=tuple(rng.uniform(-180, 180, size=3).tolist()),
         stretch=tuple(rng.uniform(1 - 0.22 * strength, 1 + 0.22 * strength, size=3).tolist()),
         twist=float(rng.uniform(-0.8, 0.8) * strength),
-        shear=tuple(rng.uniform(-0.45, 0.45, size=3).tolist() * strength),
+        shear=tuple((rng.uniform(-0.45, 0.45, size=3) * strength).tolist()),
         bend=float(rng.uniform(-0.55, 0.55) * strength),
         warp=float(rng.uniform(-0.6, 0.6) * strength),
         noise=float(rng.uniform(0, 0.015) * strength),
@@ -85,11 +84,10 @@ def _make_spec(
     index: int,
     *,
     augment: bool,
+    strength: float,
 ) -> DatasetSpec:
-    seed = data_spec.seed + index + (1_000_000 if not augment else 0)
-    transform_spec = _random_transform(data_spec, seed)
-    if not augment:
-        transform_spec = TransformSpec(seed=seed)
+    seed = data_spec.seed + index
+    transform_spec = _random_transform(seed, strength) if augment else TransformSpec(seed=seed)
     return DatasetSpec(
         structure=structure,
         n_points=data_spec.n_points,
@@ -160,6 +158,7 @@ def _build_split(
     count: int,
     *,
     augment: bool,
+    strength: float,
     start_index: int,
 ) -> tuple[list[TokenExample], int]:
     examples: list[TokenExample] = []
@@ -170,7 +169,7 @@ def _build_split(
         index = start_index + attempts
         structure = data_spec.structures[index % len(data_spec.structures)]
         attempts += 1
-        spec = _make_spec(data_spec, structure, index, augment=augment)
+        spec = _make_spec(data_spec, structure, index, augment=augment, strength=strength)
         try:
             response = generate_dataset(spec)
         except PipelineError:
@@ -196,13 +195,15 @@ def build_dataset(tokenizer: NumericTokenizer, data_spec: DataBuildSpec) -> Data
         data_spec,
         data_spec.n_train,
         augment=data_spec.augment,
+        strength=data_spec.augment_strength,
         start_index=0,
     )
     val, skipped_val = _build_split(
         tokenizer,
         data_spec,
         data_spec.n_val,
-        augment=False,
+        augment=data_spec.val_augment,
+        strength=data_spec.val_augment_strength,
         start_index=100_000,
     )
     names = [structure.value for structure in data_spec.structures]

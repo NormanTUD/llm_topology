@@ -96,6 +96,8 @@ class DataBuildSpec(BaseModel):
     task_mix: float = Field(default=0.5, ge=0, le=1)
     augment: bool = True
     augment_strength: float = Field(default=0.35, ge=0, le=1)
+    val_augment: bool = True
+    val_augment_strength: float = Field(default=0.35, ge=0, le=1)
     seed: int = 0
     filtration: FiltrationSpec = Field(default_factory=FiltrationSpec)
     target_schema: TargetSchema = Field(default_factory=TargetSchema)
@@ -136,6 +138,7 @@ class TrainConfig(BaseModel):
 
 
 class TrainingSpec(BaseModel):
+    dataset_id: str | None = None
     data: DataBuildSpec = Field(default_factory=DataBuildSpec)
     model: ModelSpec = Field(default_factory=ModelSpec)
     training: TrainConfig = Field(default_factory=TrainConfig)
@@ -143,7 +146,7 @@ class TrainingSpec(BaseModel):
     @model_validator(mode="after")
     def _validate_shapes(self) -> TrainingSpec:
         self.model.validate_heads()
-        if self.model.max_seq_len < self.data.max_seq_len:
+        if not self.dataset_id and self.model.max_seq_len < self.data.max_seq_len:
             raise ValueError("model.max_seq_len must be at least data.max_seq_len")
         return self
 

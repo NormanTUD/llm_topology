@@ -2,9 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from llm_topology.analysis.probes import analyze_checkpoint
+from llm_topology.config import FiltrationSpec
+from llm_topology.datasets import DatasetStore
+from llm_topology.model import train as train_module
 from llm_topology.model.config import (
     AnalysisSpec,
     DataBuildSpec,
@@ -59,6 +63,41 @@ def trained_run(tmp_path_factory) -> tuple[Path, object]:
     return directory, trainer.run()
 
 
+def test_augmented_dataset_build_does_not_crash() -> None:
+    data = _spec().data.model_copy(update={"augment": True, "augment_strength": 0.5})
+    bundle = build_dataset(NumericTokenizer(), data)
+    assert len(bundle.train) == data.n_train
+    assert len(bundle.val) == data.n_val
+
+
+def test_validation_augmentation_changes_val_clouds() -> None:
+    clean = _spec().data.model_copy(update={"augment": False, "val_augment": False})
+    rotated = clean.model_copy(update={"val_augment": True, "val_augment_strength": 0.45})
+    clean_bundle = build_dataset(NumericTokenizer(), clean)
+    rotated_bundle = build_dataset(NumericTokenizer(), rotated)
+    assert len(clean_bundle.val) == len(rotated_bundle.val)
+    assert not np.allclose(clean_bundle.val[0].points, rotated_bundle.val[0].points)
+    assert clean_bundle.val[0].betti == rotated_bundle.val[0].betti
+
+
+def test_dataset_manual_filtration_is_preserved() -> None:
+    data = _spec().data.model_copy(
+        update={"filtration": FiltrationSpec(method="alpha", epsilon=0.5)}
+    )
+    bundle = build_dataset(NumericTokenizer(), data)
+    for example in [*bundle.train, *bundle.val]:
+        assert example.target_groups[-1][2] == 0.5
+
+
+def test_saved_dataset_roundtrip(tmp_path: Path) -> None:
+    store = DatasetStore(root=tmp_path / "datasets")
+    meta = store.save("tiny", _spec().data)
+    assert meta["train_count"] == 4
+    loaded = store.load(meta["id"])
+    assert len(loaded.train) == 4
+    assert loaded.data_spec.structures == _spec().data.structures
+
+
 def test_training_target_order_matches_schema() -> None:
     spec = _spec()
     bundle = build_dataset(NumericTokenizer(), spec.data)
@@ -72,6 +111,21 @@ def test_training_target_order_matches_schema() -> None:
     ]
     assert example.target_groups[0] == [float(value) for value in example.betti]
     assert example.target_groups[1] == [float(value) for value in example.ph]
+
+
+def test_trainer_can_train_from_saved_dataset(tmp_path: Path, monkeypatch) -> None:
+    store = DatasetStore(root=tmp_path / "datasets")
+    meta = store.save("tiny-train", _spec().data)
+    monkeypatch.setattr(train_module, "STORE", store)
+    spec = _spec().model_copy(update={"dataset_id": meta["id"]})
+    trainer = Trainer(
+        spec,
+        tokenizer=NumericTokenizer(),
+        checkpoint_dir=tmp_path / "run-from-dataset",
+    )
+    result = trainer.run()
+    assert result.history
+    assert Path(result.best_checkpoint).exists()
 
 
 def test_training_saves_checkpoint_and_history(trained_run) -> None:

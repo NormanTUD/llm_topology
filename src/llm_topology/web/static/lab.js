@@ -7,6 +7,8 @@ const labState = {
   pollTimer: null,
   analysis: null,
   runs: [],
+  datasets: [],
+  datasetId: null,
   view: "train",
   running: false,
   stopping: false,
@@ -111,39 +113,7 @@ async function loadCatalog() {
   const defaultModel = labState.catalog.model_defaults;
   const defaultTrain = labState.catalog.training_defaults;
 
-  const current = new Set(defaultData.structures);
-  const container = $("#structure-checks");
-  container.innerHTML = "";
-  for (const structure of labState.catalog.structures) {
-    if (structure.value === "disjoint") continue;
-    const label = document.createElement("label");
-    label.className = "structure-check";
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.value = structure.value;
-    checkbox.className = "train-structure";
-    checkbox.checked = current.has(structure.value);
-    const text = document.createElement("span");
-    text.textContent = structure.label;
-    label.appendChild(checkbox);
-    label.appendChild(text);
-    container.appendChild(label);
-  }
-
-  setValue("n-train", defaultData.n_train);
-  setValue("n-val", defaultData.n_val);
-  setValue("n-points-train", defaultData.n_points);
-  setValue("ambient-train", defaultData.ambient_dim);
-  setValue("copies-train", defaultData.copies);
-  setValue("genus-train", defaultData.genus);
-  setValue("precision-train", defaultData.precision);
-  setValue("task-mix", defaultData.task_mix);
   setValue("context-train", defaultData.max_seq_len);
-  setValue("seed-train", defaultData.seed);
-  setValue("method-train", defaultData.filtration.method);
-  setValue("field-train", defaultData.filtration.field);
-  setValue("maxdim-train", defaultData.filtration.max_dim);
-  $("#augment-train").checked = Boolean(defaultData.augment);
 
   setValue("n-layers", defaultModel.n_layers);
   setValue("n-heads", defaultModel.n_heads);
@@ -199,23 +169,11 @@ function setValue(id, value) {
   if (element) element.value = String(value);
 }
 
-function selectedTrainStructures() {
-  return $$(".train-structure:checked").map((input) => input.value);
-}
-
-function applyTrainStructures(values) {
-  if (!Array.isArray(values) || !values.length) return;
-  const selected = new Set(values);
-  $$(".train-structure").forEach((input) => {
-    input.checked = selected.has(input.value);
-  });
-}
-
 function persistLabState() {
   saveUIState({
     labForm: collectById(".lab-sidebar"),
     freshForm: collectById(".fresh-controls"),
-    trainStructures: selectedTrainStructures(),
+    datasetId: labState.datasetId,
     jobId: labState.jobId,
   });
 }
@@ -236,38 +194,11 @@ function schemaForMaxDim(maxDim) {
 }
 
 function buildSpec() {
-  const structures = $$(".train-structure:checked").map((input) => input.value);
-  if (!structures.length) throw new Error("Select at least one training structure.");
-  const maxDim = intValue("maxdim-train", 0, 6, 2);
+  const datasetId = $("#dataset-select").value || labState.datasetId;
+  if (!datasetId) throw new Error("Select a saved dataset first.");
   const context = intValue("context-train", 64, 32768, 1024);
-  const method = $("#method-train").value;
-  const field = $("#field-train").value;
-  const filtration = {
-    ...labState.catalog.data_defaults.filtration,
-    method,
-    field,
-    max_dim: maxDim,
-    epsilon: null,
-    max_edge_length: null,
-  };
   return {
-    data: {
-      structures,
-      n_train: intValue("n-train", 4, 5000, 64),
-      n_val: intValue("n-val", 2, 1000, 24),
-      n_points: intValue("n-points-train", 8, 512, 32),
-      ambient_dim: intValue("ambient-train", 2, 12, 3),
-      copies: intValue("copies-train", 1, 32, 1),
-      genus: intValue("genus-train", 1, 16, 2),
-      precision: intValue("precision-train", 1, 8, 3),
-      max_seq_len: context,
-      task_mix: Math.min(1, Math.max(0, numberValue("task-mix", 0.5))),
-      augment: $("#augment-train").checked,
-      augment_strength: Math.min(1, Math.max(0, numberValue("augment-strength", 0.35))),
-      seed: intValue("seed-train", -2147483648, 2147483647, 0),
-      filtration,
-      target_schema: schemaForMaxDim(maxDim),
-    },
+    dataset_id: datasetId,
     model: {
       max_seq_len: context,
       n_layers: intValue("n-layers", 1, 24, 3),
@@ -572,6 +503,14 @@ function renderPredictionPairs(job) {
       predRow.innerHTML = `<span class="label">pred</span> b=(${predBetti.slice(0, 3).join(",")})`;
       values.appendChild(trueRow);
       values.appendChild(predRow);
+      const trueFiltration = prediction.true_filtration || [];
+      const predictedFiltration = prediction.predicted_filtration || [];
+      if (trueFiltration.length || predictedFiltration.length) {
+        const filt = document.createElement("div");
+        filt.className = "predicted";
+        filt.innerHTML = `<span class="label">filtration ε</span> true ${trueFiltration[2] ?? "—"} · pred ${predictedFiltration[2] ?? "—"}`;
+        values.appendChild(filt);
+      }
       if (prediction.predicted_text) {
         const text = document.createElement("div");
         text.className = "prediction-condition";
@@ -1158,6 +1097,14 @@ function renderFreshPredictions(items, warnings) {
     predRow.innerHTML = `<span class="label">pred</span> b=(${predBetti.slice(0, 3).join(",")})`;
     values.appendChild(trueRow);
     values.appendChild(predRow);
+    const trueFiltration = item.true_groups?.[4] || [];
+    const predictedFiltration = item.predicted_groups?.[4] || [];
+    if (trueFiltration.length || predictedFiltration.length) {
+      const filt = document.createElement("div");
+      filt.className = "predicted";
+      filt.innerHTML = `<span class="label">filtration ε</span> true ${trueFiltration[2] ?? "—"} · pred ${predictedFiltration[2] ?? "—"}`;
+      values.appendChild(filt);
+    }
     const predicted = document.createElement("div");
     predicted.className = "prediction-condition";
     predicted.textContent = item.predicted_text || "";
@@ -1165,6 +1112,48 @@ function renderFreshPredictions(items, warnings) {
     card.appendChild(values);
     container.appendChild(card);
   }
+}
+
+async function loadDatasets(preferredId = null) {
+  const select = $("#dataset-select");
+  const previous = preferredId || select.value || labState.datasetId;
+  labState.datasets = await fetchJSON("/api/datasets");
+  select.innerHTML = "";
+  if (!labState.datasets.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "No saved dataset";
+    select.appendChild(option);
+    labState.datasetId = null;
+    $("#dataset-meta").textContent = "No dataset selected. Build one in Data Studio first.";
+    return;
+  }
+  for (const dataset of labState.datasets.slice().reverse()) {
+    const option = document.createElement("option");
+    option.value = dataset.id;
+    option.textContent = `${dataset.name} · ${dataset.id} · ${dataset.train_count}/${dataset.val_count}`;
+    select.appendChild(option);
+  }
+  const valid = labState.datasets.some((dataset) => dataset.id === previous);
+  const chosen = valid ? previous : labState.datasets[labState.datasets.length - 1].id;
+  select.value = chosen;
+  labState.datasetId = chosen;
+  updateDatasetMeta();
+}
+
+function updateDatasetMeta() {
+  const dataset = labState.datasets.find((item) => item.id === labState.datasetId);
+  const meta = $("#dataset-meta");
+  if (!dataset) {
+    meta.textContent = "No dataset selected.";
+    return;
+  }
+  const valAugment = dataset.data_spec?.val_augment ? "val transforms" : "clean val";
+  meta.textContent = `${dataset.name} · ${dataset.id} · train ${dataset.train_count} / val ${dataset.val_count} · ${dataset.structures.join(", ")} · max_dim ${dataset.max_dim} · context ${dataset.max_seq_len} · ${valAugment}`;
+  if (dataset.max_seq_len > intValue("context-train", 64, 32768, 1024)) {
+    setValue("context-train", dataset.max_seq_len);
+  }
+  persistLabState();
 }
 
 function setTab(tab) {
@@ -1179,6 +1168,16 @@ function setTab(tab) {
 function bindEvents() {
   $("#train-toggle").addEventListener("click", toggleTraining);
   $("#refresh-runs").addEventListener("click", refreshRuns);
+  $("#refresh-datasets").addEventListener("click", () => loadDatasets(labState.datasetId));
+  $("#dataset-select").addEventListener("change", () => {
+    labState.datasetId = $("#dataset-select").value || null;
+    updateDatasetMeta();
+  });
+  $("#go-data-studio").addEventListener("click", () => {
+    document.querySelector("#nav-data")?.click();
+    document.querySelector("#dataset-builder")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  window.addEventListener("llm-datasets-changed", () => loadDatasets(labState.datasetId));
   $("#run-analysis").addEventListener("click", runAnalysis);
   $("#analysis-job").addEventListener("change", () => {
     labState.jobId = $("#analysis-job").value || labState.jobId;
@@ -1226,7 +1225,7 @@ async function boot() {
     const saved = await loadUIState();
     applyById(saved.labForm || {});
     applyById(saved.freshForm || {});
-    applyTrainStructures(saved.trainStructures);
+    await loadDatasets(saved.datasetId);
     await refreshRuns();
     if (saved.jobId) {
       labState.jobId = saved.jobId;
