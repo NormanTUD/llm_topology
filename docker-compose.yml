@@ -1,0 +1,31 @@
+services:
+  app:
+    build: .
+    command: ["python", "app.py", "--no-browser", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      LLM_TOPOLOGY_BOOTSTRAPPED: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    ports:
+      - "127.0.0.1:8800:8000"
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    shm_size: 256m
+
+  gui-test:
+    build: .
+    profiles: ["test"]
+    depends_on:
+      - app
+    command: ["python", "scripts/docker_gui_smoke.py", "--base-url", "http://app:8000"]
+    environment:
+      LLM_TOPOLOGY_BOOTSTRAPPED: "1"
+      OMP_NUM_THREADS: "1"
+      MKL_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    mem_limit: 1536m
+    cpus: 1.5
+    pids_limit: 512
+    shm_size: 512m
