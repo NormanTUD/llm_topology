@@ -1606,3 +1606,12 @@ input[type="range"] {
   padding: 4px 22px 4px 7px;
   font-size: 9px;
 }
+
+.mini-label {
+  color: var(--faint);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}

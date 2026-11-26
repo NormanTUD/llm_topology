@@ -147,12 +147,17 @@ def betti_at(
     epsilon: float,
     *,
     tolerance: float = 1e-9,
+    min_lifetime: float = 0.0,
+    filter_from_dim: int = 1,
 ) -> list[int]:
     values: list[int] = []
-    for diagram in diagrams:
+    for dimension, diagram in enumerate(diagrams):
         count = 0
         for birth, death in diagram:
             if birth - tolerance <= epsilon and (death is None or epsilon < death - tolerance):
+                lifetime = float("inf") if death is None else death - birth
+                if dimension >= filter_from_dim and lifetime < min_lifetime:
+                    continue
                 count += 1
         values.append(count)
     return values
@@ -256,9 +261,18 @@ def compute_persistence(
         float(spec.epsilon) if spec.epsilon is not None else select_epsilon(diagrams, max_epsilon)
     )
     epsilon = min(max(epsilon, 0.0), max_epsilon)
-    betti = betti_at(diagrams, epsilon)
+    max_lifetime = max(
+        (
+            (death - birth) if death is not None else max_epsilon - birth
+            for dimension in range(1, len(diagrams))
+            for birth, death in diagrams[dimension]
+        ),
+        default=0.0,
+    )
+    significance = max(spec.significance_fraction * max_lifetime, 1e-9)
+    betti = betti_at(diagrams, epsilon, min_lifetime=significance)
     grid = _curve_grid(diagrams, max_epsilon)
-    curve = [betti_at(diagrams, float(value)) for value in grid]
+    curve = [betti_at(diagrams, float(value), min_lifetime=significance) for value in grid]
 
     finite_values = sorted(
         {
@@ -290,5 +304,6 @@ def compute_persistence(
         finite_values=finite_values,
         epsilon_grid=[float(value) for value in grid],
         betti_curve=curve,
+        significance_threshold=significance,
         warnings=warnings,
     )

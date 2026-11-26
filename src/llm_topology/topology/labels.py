@@ -108,6 +108,6 @@ def build_dataset_response(
     tokenizer,
 ) -> tuple[list[list[float]], str, str]:
     groups = build_target_groups(sample, persistence, schema, spec)
-    target_text = tokenizer.target_text(groups)
-    sequence = tokenizer.sequence(sample.points, groups)
+    target_text = tokenizer.target_text(groups, precision=spec.precision)
+    sequence = tokenizer.sequence(sample.points, groups, precision=spec.precision)
     return groups, target_text, sequence

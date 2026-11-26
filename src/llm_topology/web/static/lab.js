@@ -476,7 +476,21 @@ function renderPredictionPairs(job) {
     head.appendChild(status);
     card.appendChild(head);
 
+    if (prediction.original_projection && prediction.original_projection.length) {
+      const label = document.createElement("div");
+      label.className = "mini-label";
+      label.textContent = "original";
+      card.appendChild(label);
+      const mini = document.createElement("div");
+      mini.className = "prediction-mini";
+      card.appendChild(mini);
+      window.requestAnimationFrame(() => plotMiniPoints(mini, prediction.original_projection));
+    }
     if (prediction.input_projection && prediction.input_projection.length) {
+      const label = document.createElement("div");
+      label.className = "mini-label";
+      label.textContent = "augmented model input";
+      card.appendChild(label);
       const mini = document.createElement("div");
       mini.className = "prediction-mini";
       card.appendChild(mini);
@@ -1186,7 +1200,21 @@ async function previewDataset() {
       head.appendChild(name);
       head.appendChild(length);
       card.appendChild(head);
+      if (item.original_projection?.length) {
+        const label = document.createElement("div");
+        label.className = "mini-label";
+        label.textContent = "original";
+        card.appendChild(label);
+        const mini = document.createElement("div");
+        mini.className = "prediction-mini";
+        card.appendChild(mini);
+        window.requestAnimationFrame(() => plotMiniPoints(mini, item.original_projection));
+      }
       if (item.projection?.length) {
+        const label = document.createElement("div");
+        label.className = "mini-label";
+        label.textContent = "split / augmented input";
+        card.appendChild(label);
         const mini = document.createElement("div");
         mini.className = "prediction-mini";
         card.appendChild(mini);

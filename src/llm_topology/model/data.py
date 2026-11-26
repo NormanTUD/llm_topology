@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 from ..config import DatasetSpec, StructureKind, TransformSpec
 from ..pipeline import PipelineError, generate_dataset
 from ..tokenizer import DEFAULT_BOUNDARY, NumericTokenizer, format_number, serialize_points
+from ..topology.generators import generate_point_cloud
 from .config import DataBuildSpec
 
 
@@ -32,6 +33,7 @@ class TokenExample:
     betti: list[float]
     ph: list[float]
     points: list[list[float]]
+    original_points: list[list[float]]
     target_text: str
     target_groups: list[list[float]]
     seq_len: int
@@ -120,6 +122,8 @@ def _make_spec(
         points_per_component=data_spec.points_per_component,
         ambient_dim=data_spec.ambient_dim,
         copies=data_spec.copies,
+        copies_min=data_spec.copies_min,
+        copies_max=data_spec.copies_max,
         genus=data_spec.genus,
         seed=seed,
         params={},
@@ -134,6 +138,7 @@ def _make_example(
     response,
     task: str,
     data_spec: DataBuildSpec,
+    original_points: list[list[float]],
 ) -> TokenExample | None:
     sample = response.sample
     point_text = serialize_points(sample.points, precision=data_spec.precision)
@@ -181,6 +186,7 @@ def _make_example(
         betti=_pad([float(value) for value in sample.theoretical_betti], max_dim + 1),
         ph=_pad([float(value) for value in response.persistence.betti], max_dim + 1),
         points=sample.points,
+        original_points=original_points,
         target_text=target_text,
         target_groups=response.target_groups,
         seq_len=len(input_ids),
@@ -212,7 +218,9 @@ def _build_split(
             skipped += 1
             continue
         task = "generate" if attempts <= round(count * data_spec.task_mix) else "infer"
-        example = _make_example(tokenizer, response, task, data_spec)
+        original_spec = spec.model_copy(update={"transform": TransformSpec(seed=spec.seed)})
+        original_points = generate_point_cloud(original_spec).points
+        example = _make_example(tokenizer, response, task, data_spec, original_points)
         if example is None:
             skipped += 1
             continue

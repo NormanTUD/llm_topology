@@ -70,6 +70,14 @@ def test_augmented_dataset_build_does_not_crash() -> None:
     assert len(bundle.val) == data.n_val
 
 
+def test_augmented_example_keeps_original_for_display() -> None:
+    data = _spec().data.model_copy(update={"augment": True, "augment_strength": 0.5})
+    bundle = build_dataset(NumericTokenizer(), data)
+    example = bundle.train[0]
+    assert example.original_points
+    assert example.points != example.original_points
+
+
 def test_val_test_splits_and_modes() -> None:
     data = _spec().data.model_copy(
         update={

@@ -502,12 +502,20 @@ def _apply_transform(points: np.ndarray, spec: DatasetSpec) -> np.ndarray:
 
 def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     rng = np.random.default_rng(spec.seed)
+    if spec.copies_min is not None or spec.copies_max is not None:
+        low = spec.copies_min if spec.copies_min is not None else spec.copies
+        high = spec.copies_max if spec.copies_max is not None else low
+        if high < low:
+            raise GeneratorError("copies_max must be >= copies_min")
+        copies = int(rng.integers(low, high + 1))
+    else:
+        copies = spec.copies
     total_points = (
-        spec.points_per_component * spec.copies
+        spec.points_per_component * copies
         if spec.points_per_component is not None
         else spec.n_points
     )
-    if total_points < spec.copies:
+    if total_points < copies:
         raise GeneratorError("n_points must be at least as large as copies")
 
     base_kind = spec.structure
@@ -523,16 +531,16 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     topology = theoretical_topology(
         base_kind if spec.structure is StructureKind.DISJOINT else spec.structure,
         genus=spec.genus,
-        copies=spec.copies,
+        copies=copies,
         params=spec.params,
         max_dim=spec.filtration.max_dim,
     )
 
-    if spec.copies == 1:
+    if copies == 1:
         points = _single_cloud(spec, base_kind, total_points, rng)
     else:
-        counts = np.full(spec.copies, total_points // spec.copies, dtype=int)
-        counts[: total_points % spec.copies] += 1
+        counts = np.full(copies, total_points // copies, dtype=int)
+        counts[: total_points % copies] += 1
         # One canonical copy is generated and translated. Identical copies keep
         # persistence intervals aligned, which stabilizes b0=N multi-torus
         # labels; variation across generated clouds comes from the batch/seed.
@@ -555,14 +563,14 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     structure_name = STRUCTURE_LABELS[
         base_kind if spec.structure is StructureKind.DISJOINT else spec.structure
     ]
-    if spec.copies > 1:
-        structure_name = f"{spec.copies} x {structure_name}"
+    if copies > 1:
+        structure_name = f"{copies} x {structure_name}"
     if spec.structure is StructureKind.DISJOINT:
-        structure_name = f"{spec.copies} x {STRUCTURE_LABELS[base_kind]}"
+        structure_name = f"{copies} x {STRUCTURE_LABELS[base_kind]}"
 
     metadata: dict[str, float | int | str | bool | None] = {
         "base_structure": base_kind.value,
-        "copies": spec.copies,
+        "copies": copies,
         "points_per_component": spec.points_per_component,
         "total_points": total_points,
         "seed": spec.seed,

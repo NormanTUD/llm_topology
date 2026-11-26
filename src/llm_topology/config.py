@@ -70,6 +70,7 @@ class FiltrationSpec(BaseModel):
     epsilon: float | None = Field(default=None, ge=0)
     max_edge_length: float | None = Field(default=None, gt=0)
     rips_threshold_quantile: float = Field(default=0.35, gt=0, le=1)
+    significance_fraction: float = Field(default=0.03, ge=0, le=1)
 
 
 class TargetBlock(BaseModel):
@@ -132,10 +133,13 @@ class TargetSchema(BaseModel):
 
 class DatasetSpec(BaseModel):
     structure: StructureKind = StructureKind.CIRCLE
-    n_points: int = Field(default=240, ge=4)
+    n_points: int = Field(default=400, ge=4)
     points_per_component: int | None = Field(default=None, ge=4)
+    precision: int = Field(default=5, ge=1, le=8)
     ambient_dim: int = Field(default=3, ge=1, le=64)
     copies: int = Field(default=1, ge=1, le=1000)
+    copies_min: int | None = Field(default=None, ge=1, le=1000)
+    copies_max: int | None = Field(default=None, ge=1, le=1000)
     seed: int = 0
     genus: int = Field(default=2, ge=1, le=32)
     params: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
@@ -175,6 +179,7 @@ class PersistenceSummary(BaseModel):
     finite_values: list[float]
     epsilon_grid: list[float] = Field(default_factory=list)
     betti_curve: list[list[int]] = Field(default_factory=list)
+    significance_threshold: float = 0.0
     warnings: list[str] = Field(default_factory=list)
 
 

@@ -92,8 +92,10 @@ class DataBuildSpec(BaseModel):
     points_per_component: int | None = Field(default=None, ge=8, le=2048)
     ambient_dim: int = Field(default=3, ge=2, le=12)
     copies: int = Field(default=1, ge=1, le=32)
+    copies_min: int | None = Field(default=None, ge=1, le=1000)
+    copies_max: int | None = Field(default=None, ge=1, le=1000)
     genus: int = Field(default=2, ge=1, le=16)
-    precision: int = Field(default=3, ge=1, le=8)
+    precision: int = Field(default=5, ge=1, le=8)
     max_seq_len: int = Field(default=1024, ge=64, le=32768)
     task_mix: float = Field(default=0.5, ge=0, le=1)
     augment: bool = True

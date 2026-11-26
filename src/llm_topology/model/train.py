@@ -398,6 +398,7 @@ class Trainer:
             except Exception as exc:
                 parse_error = str(exc)
             projection, _ = project_for_display(example.points)
+            original_projection, _ = project_for_display(example.original_points)
             predicted_betti = (
                 predicted_groups[0] if predicted_groups and len(predicted_groups) > 0 else None
             )
@@ -409,6 +410,7 @@ class Trainer:
                     "task": "infer",
                     "structure_name": example.structure_name,
                     "input_projection": projection,
+                    "original_projection": original_projection,
                     "true_text": example.target_text,
                     "true_groups": example.target_groups,
                     "predicted_text": predicted_text,

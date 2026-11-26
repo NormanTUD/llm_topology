@@ -77,6 +77,36 @@ def test_reference_cloud_is_separate_from_model_sequence() -> None:
     assert response.sequence.startswith("<") is False or response.sequence
 
 
+def test_default_torus_guard_matches() -> None:
+    response = generate_dataset(DatasetSpec(structure=StructureKind.TORUS, n_points=400, seed=0))
+    assert response.topology_guard is True
+    assert response.target_groups[0] == [1.0, 2.0, 1.0]
+
+
+def test_precision_is_used_in_serialized_targets() -> None:
+    response = generate_dataset(
+        DatasetSpec(structure=StructureKind.CIRCLE, n_points=80, precision=2)
+    )
+    for raw in response.target_text.replace(";", ",").split(","):
+        if "." in raw:
+            assert len(raw.split(".")[1]) <= 2
+
+
+def test_copies_range_changes_b0() -> None:
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.TORUS,
+            copies_min=1,
+            copies_max=5,
+            points_per_component=20,
+            ambient_dim=3,
+            seed=4,
+        )
+    )
+    assert 1 <= response.sample.n_components <= 5
+    assert response.sample.theoretical_betti[0] == response.sample.n_components
+
+
 def test_points_per_component_scales_total_points() -> None:
     response = generate_dataset(
         DatasetSpec(

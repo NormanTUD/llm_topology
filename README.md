@@ -62,7 +62,8 @@ Workflow:
 
 1. Im Data Studio Punktwolken generieren und die Rezeptur prüfen.
 2. Unten im Data Studio `Build & save dataset` ausführen. Das erzeugt
-   `datasets/ds-NNNN/` mit Train-/Val-Beispielen.
+   `datasets/ds-NNNN/` mit Train-/Val-/Test-Beispielen. Bei zu kurzem
+   Kontext wird dieser automatisch auf die nächste Zweierpotenz angehoben.
 3. Im Model Lab das gespeicherte Dataset auswählen und trainieren. Val- und
    Test-Split können im Dataset Builder getrennt transformiert werden.
 4. Während des Trainings Live-Loss, Validierungspaare und Vorhersagen sehen.
@@ -97,11 +98,14 @@ Data Foundation:
 - Trainingsdatensatz-Erzeugung nach `datasets/ds-NNNN/`,
 - getrennte Train-/Val-/Test-Augmentierung mit `clean`, `same`, `heldout`,
 - Test-Split und Test-Metriken nach dem Training,
-- Dataset-Preview pro Split mit Punktwolken, Tokenlängen, Zielen und
-  tatsächlich angewendeter Transformation,
+- Dataset-Preview pro Split mit Original- und augmentierter Punktwolke,
+  Tokenlängen, Zielen und tatsächlich angewendeter Transformation,
 - Punkte pro Komponente (z.B. 10 Tori mit je 400 Punkten) zusätzlich zur
   Gesamtpunktzahl,
 - Epsilon als Input-Token im manuellen Modus plus Auto-Modus,
+- einstellbare String-Präzision mit Default 5 Nachkommastellen,
+- automatische Kontextvergrößerung im Dataset Builder, wenn das Token-Budget
+  nicht passt,
 - Temml-Gleichungsansicht,
 - pytest-Suite und GitHub-Actions-CI.
 
@@ -143,7 +147,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **93 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **97 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -203,8 +207,11 @@ Zwei disjunkte Tori: `(2,4,2)`. Fünf disjunkte Genus-2-Flächen: `(5,20,5)`.
 "5 Doppeltori" wird als fünf getrennte Genus-2-Komponenten umgesetzt. Eine
 einzelne zusammenhängende Genus-2-Fläche entsteht über `genus=2` und
 `copies=1`. Für `structure=torus` und `copies=N` gilt entsprechend
-`b0=N`, `b1=2N`, `b2=N`; alle Kopien bleiben Tori. Für stabile PH-Labels
-sollten es etwa 400 Punkte pro Kopie sein.
+`b0=N`, `b1=2N`, `b2=N`; alle Kopien bleiben Tori. `Components min/max`
+zieht pro Wolke eine zufällige Anzahl im Bereich, z.B. 1–5. Für stabile
+PH-Labels sollten es etwa 400 Punkte pro Kopie sein. Die Auto-Filtration
+zählt nur Persistenzklassen oberhalb einer relativen Signifikanzschwelle;
+das reduziert winzige Sampling-Artefakte.
 
 ## Zielformat
 
@@ -382,13 +389,15 @@ Das Modell wird **multitasking** trainiert:
 4. **Trainingsziele:** maskierte Cross-Entropy, auxiliäre MSE/CE,
    Ranking/Kontrastivloss und Multiple-Choice-Evaluation.
 
-Default für CPU: 3 Layer, 4 Heads, `d_model=96`, FFN 384, Kontext 1024,
-32 Punkte, 3 Nachkommastellen. Das ist bewusst klein und schnell genug für
-interaktive Läufe. Alle Werte sind im Model Lab änderbar. Trainiert wird mit
-konfigurierbarer Batch-Größe; N Punktwolken werden also gleichzeitig als
-Batch verarbeitet, nicht als eine einzige Riesensequenz. Bei mehreren
-Komponenten kann `Points per component` gesetzt werden; die Gesamtzahl ist
-dann `points_per_component * copies`.
+Default für CPU: 3 Layer, 4 Heads, `d_model=96`, FFN 384, Kontext 1024.
+Trainingsdatasets starten mit 32 Punkten und 5 Nachkommastellen; das Data
+Studio zeigt standardmäßig 400 Punkte pro Wolke für stabilere PH-Labels.
+Alle Werte sind änderbar. Trainiert wird mit konfigurierbarer Batch-Größe;
+N Punktwolken werden also gleichzeitig als Batch verarbeitet, nicht als eine
+einzige Riesensequenz. Bei mehreren Komponenten kann
+`Points per component` gesetzt werden; die Gesamtzahl ist dann
+`points_per_component * copies`. `Components min/max` erlaubt z.B. 1–5 Tori
+pro Wolke.
 
 Die bedingte Punktwolkengenerierung ist als reine Sequenzgenerierung mit
 Task-Token umgesetzt. Ein separater Decoder-Kopf bleibt eine spätere

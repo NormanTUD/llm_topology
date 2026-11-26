@@ -300,8 +300,11 @@ function buildSpec() {
     structure,
     n_points: clampInt($("#n-points").value, 4, 100000, 240),
     points_per_component: optionalInt("points-per-component", 4, 2048),
+    precision: clampInt($("#precision").value, 1, 8, 5),
     ambient_dim: clampInt($("#ambient-dim").value, 2, 64, 3),
     copies: clampInt($("#copies").value, 1, 1000, 1),
+    copies_min: optionalInt("copies-min", 1, 1000),
+    copies_max: optionalInt("copies-max", 1, 1000),
     genus: clampInt($("#genus").value, 1, 32, 2),
     seed,
     params,
@@ -887,19 +890,26 @@ async function copyText(text, label) {
 }
 
 function updateDatasetBudget() {
-  const copies = clampInt($("#copies")?.value, 1, 1000, 1);
+  const copies = optionalInt("copies-max", 1, 1000) || clampInt($("#copies")?.value, 1, 1000, 1);
   const per = optionalInt("dataset-points-per-component", 8, 2048);
   const points = per ? per * copies : clampInt($("#dataset-n-points")?.value, 8, 4096, 32);
   const ambient = clampInt($("#ambient-dim")?.value, 2, 64, 3);
-  const precision = clampInt($("#dataset-precision")?.value, 1, 8, 3);
-  const context = clampInt($("#dataset-context")?.value, 64, 32768, 1024);
+  const precision = clampInt($("#dataset-precision")?.value, 1, 8, 5);
+  let context = clampInt($("#dataset-context")?.value, 64, 32768, 1024);
   const estimated = points * ambient * (precision + 3) + 96;
+  let autoFitted = false;
+  if (estimated > context && estimated <= 32768) {
+    context = 2 ** Math.ceil(Math.log2(estimated));
+    const contextInput = $("#dataset-context");
+    if (contextInput) contextInput.value = String(context);
+    autoFitted = true;
+  }
   const budget = $("#dataset-budget");
   const button = $("#build-dataset");
   if (budget) {
     const fits = estimated <= context;
     budget.textContent = `Estimated token budget: ~${estimated} / context ${context}. ` +
-      (fits ? "Fits." : "Increase context or reduce points/precision.");
+      (fits ? (autoFitted ? "Context auto-fitted." : "Fits.") : "Reduce points/precision or raise the context cap.");
     budget.style.color = fits ? "" : "var(--red)";
   }
   if (button) button.disabled = estimated > context;
@@ -923,8 +933,12 @@ async function buildTrainingDataset() {
   try {
     const base = buildSpec();
     updateDatasetBudget();
+    const perComponent = optionalInt("dataset-points-per-component", 8, 2048);
+    const totalPoints = perComponent
+      ? perComponent * Math.max(1, base.copies_max || base.copies || 1)
+      : clampInt($("#dataset-n-points").value, 8, 4096, 32);
     const estimated = totalPoints *
-      base.ambient_dim * (clampInt($("#dataset-precision").value, 1, 8, 3) + 3) + 96;
+      base.ambient_dim * (clampInt($("#dataset-precision").value, 1, 8, 5) + 3) + 96;
     if (estimated > clampInt($("#dataset-context").value, 64, 32768, 1024)) {
       throw new Error("Dataset token budget exceeds context. Increase context or reduce points/precision.");
     }
@@ -935,10 +949,6 @@ async function buildTrainingDataset() {
       throw new Error("No compatible structure selected for this dataset.");
     }
     const filtration = { ...base.filtration };
-    const perComponent = optionalInt("dataset-points-per-component", 8, 2048);
-    const totalPoints = perComponent
-      ? perComponent * base.copies
-      : clampInt($("#dataset-n-points").value, 8, 4096, 32);
     const dataSpec = {
       structures,
       n_train: clampInt($("#dataset-n-train").value, 4, 5000, 48),
@@ -948,8 +958,10 @@ async function buildTrainingDataset() {
       points_per_component: perComponent,
       ambient_dim: base.ambient_dim,
       copies: base.copies,
+      copies_min: base.copies_min,
+      copies_max: base.copies_max,
       genus: base.genus,
-      precision: clampInt($("#dataset-precision").value, 1, 8, 3),
+      precision: clampInt($("#dataset-precision").value, 1, 8, 5),
       max_seq_len: clampInt($("#dataset-context").value, 64, 32768, 1024),
       task_mix: Math.max(0, Math.min(1, numberValue("dataset-task-mix", 0.5))),
       augment: $("#dataset-augment").checked,

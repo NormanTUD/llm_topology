@@ -88,6 +88,7 @@ class DatasetStore:
         items = []
         for example in examples[:limit]:
             projection, _ = project_for_display(example.points)
+            original_projection, _ = project_for_display(example.original_points)
             transform = example.transform or {}
             summary_parts = []
             for key in ("rotation_deg", "stretch", "twist", "shear", "bend", "warp", "noise"):
@@ -101,7 +102,9 @@ class DatasetStore:
                     "task": example.task,
                     "seq_len": example.seq_len,
                     "projection": projection,
+                    "original_projection": original_projection,
                     "points": example.points,
+                    "original_points": example.original_points,
                     "true_groups": example.target_groups,
                     "target_text": example.target_text,
                     "transform": transform,
@@ -122,6 +125,7 @@ class DatasetStore:
 
         def _example(item: dict[str, Any]) -> TokenExample:
             item.setdefault("transform", {})
+            item.setdefault("original_points", item.get("points", []))
             return TokenExample(**item)
 
         train = [_example(item) for item in data.get("train", [])]
