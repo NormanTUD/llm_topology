@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -32,6 +33,7 @@ from ..tokenizer import (
 )
 from ..topology.generators import STRUCTURE_IDS, STRUCTURE_LABELS
 from .jobs import MANAGER, JobError
+from .state import STORE
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 STATIC_DIR = PACKAGE_ROOT / "static"
@@ -274,10 +276,36 @@ async def analyze_job(job_id: str, spec: AnalysisSpec | None = None) -> dict[str
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
+@app.post("/api/predict/{job_id}")
+async def predict_job(job_id: str, payload: BatchGenerateRequest) -> dict[str, object]:
+    try:
+        return MANAGER.predict(
+            job_id,
+            payload.spec,
+            count=payload.count,
+            structures=payload.structures,
+        )
+    except JobError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - surfaced to the UI
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+
 @app.get("/lab", response_class=HTMLResponse)
 async def lab(request: Request) -> HTMLResponse:
+    # Single-page app: /lab serves the same shell and the client switches tabs.
     return templates.TemplateResponse(
         request=request,
-        name="lab.html",
+        name="index.html",
         context={"catalog": _catalog().model_dump(mode="json")},
     )
+
+
+@app.get("/api/ui-state")
+async def get_ui_state() -> dict[str, Any]:
+    return STORE.get()
+
+
+@app.post("/api/ui-state")
+async def save_ui_state(patch: dict[str, Any]) -> dict[str, Any]:
+    return STORE.save(patch)

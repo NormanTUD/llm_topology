@@ -1,0 +1,235 @@
+<main class="lab-layout">
+    <aside class="panel lab-sidebar">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">CONTROL ROOM</span>
+          <h2>Experiment</h2>
+        </div>
+        <span class="chip chip-mono" id="device-chip">cpu</span>
+      </div>
+
+      <div class="lab-tabs">
+        <button type="button" class="lab-tab active" data-tab="train">Train</button>
+        <button type="button" class="lab-tab" data-tab="interpret">Probe</button>
+      </div>
+
+      <div class="tab-pane active" id="train-controls">
+        <details class="section" open>
+          <summary>Dataset <span class="summary-note">mixed structures</span></summary>
+          <div class="structure-checks" id="structure-checks"></div>
+          <div class="control-grid">
+            <label class="control"><span>Train samples</span><input type="number" id="n-train" min="4" max="5000" value="64"></label>
+            <label class="control"><span>Val samples</span><input type="number" id="n-val" min="2" max="1000" value="24"></label>
+            <label class="control"><span>Points</span><input type="number" id="n-points-train" min="8" max="512" value="32"></label>
+            <label class="control"><span>Ambient dim</span><input type="number" id="ambient-train" min="2" max="12" value="3"></label>
+            <label class="control"><span>Copies</span><input type="number" id="copies-train" min="1" max="32" value="1"></label>
+            <label class="control"><span>Genus</span><input type="number" id="genus-train" min="1" max="16" value="2"></label>
+            <label class="control"><span>Precision</span><input type="number" id="precision-train" min="1" max="8" value="3"></label>
+            <label class="control"><span>Task mix</span><input type="number" id="task-mix" min="0" max="1" step="0.05" value="0.5"></label>
+            <label class="control"><span>Context</span><input type="number" id="context-train" min="64" max="32768" value="1024"></label>
+            <label class="control"><span>Seed</span><input type="number" id="seed-train" value="0"></label>
+            <label class="control"><span>Filtration</span><select id="method-train"><option value="alpha">Alpha</option><option value="rips">Rips</option></select></label>
+            <label class="control"><span>Field</span><select id="field-train"><option value="Z2">Z2</option><option value="Z3">Z3 (Q-proxy)</option></select></label>
+            <label class="control"><span>Max homology dim</span><input type="number" id="maxdim-train" min="0" max="6" value="2"></label>
+            <label class="control"><span>Augment strength</span><input type="number" id="augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
+            <label class="control checkbox"><input type="checkbox" id="augment-train" checked><span>Random transforms</span></label>
+          </div>
+        </details>
+
+        <details class="section">
+          <summary>Model <span class="summary-note">from scratch</span></summary>
+          <div class="control-grid">
+            <label class="control"><span>Layers</span><input type="number" id="n-layers" min="1" max="24" value="3"></label>
+            <label class="control"><span>Heads</span><input type="number" id="n-heads" min="1" max="16" value="4"></label>
+            <label class="control"><span>d_model</span><input type="number" id="d-model" min="8" max="1024" value="96"></label>
+            <label class="control"><span>FFN width</span><input type="number" id="d-ff" min="8" max="4096" value="384"></label>
+            <label class="control"><span>Dropout</span><input type="number" id="dropout" min="0" max="0.8" step="0.01" value="0"></label>
+            <label class="control"><span>Activation</span><select id="activation"><option value="silu">SiLU</option><option value="gelu">GELU</option><option value="relu">ReLU</option></select></label>
+            <label class="control"><span>Norm</span><select id="norm-placement"><option value="pre">Pre-LN</option><option value="post">Post-LN</option></select></label>
+            <label class="control"><span>Positions</span><select id="position-encoding"><option value="learned">Learned</option><option value="rope">RoPE</option><option value="none">None</option></select></label>
+            <label class="control"><span>Init</span><select id="init-scheme"><option value="normal">Normal</option><option value="xavier_uniform">Xavier uniform</option><option value="xavier_normal">Xavier normal</option><option value="orthogonal">Orthogonal</option><option value="uniform">Uniform</option><option value="zero">Zero</option></select></label>
+            <label class="control"><span>Init std</span><input type="number" id="init-std" step="0.001" min="0.0001" value="0.02"></label>
+            <label class="control"><span>Init seed</span><input type="number" id="init-seed" value="0"></label>
+            <label class="control checkbox"><input type="checkbox" id="tie-embeddings" checked><span>Tie embeddings</span></label>
+            <label class="control checkbox"><input type="checkbox" id="use-bias" checked><span>Use bias</span></label>
+          </div>
+        </details>
+
+        <details class="section">
+          <summary>Training <span class="summary-note">CPU friendly</span></summary>
+          <div class="control-grid">
+            <label class="control"><span>Epochs</span><input type="number" id="epochs" min="1" max="1000" value="6"></label>
+            <label class="control"><span>Batch size</span><input type="number" id="batch-size" min="1" max="512" value="8"></label>
+            <label class="control"><span>LR</span><input type="number" id="lr" step="0.0001" min="0.000001" value="0.0003"></label>
+            <label class="control"><span>Weight decay</span><input type="number" id="weight-decay" step="0.001" min="0" value="0.01"></label>
+            <label class="control"><span>Optimizer</span><select id="optimizer"><option value="adamw">AdamW</option><option value="adam">Adam</option><option value="sgd">SGD</option></select></label>
+            <label class="control"><span>Warmup steps</span><input type="number" id="warmup" min="0" value="20"></label>
+            <label class="control"><span>Grad clip</span><input type="number" id="grad-clip" step="0.1" min="0" value="1"></label>
+            <label class="control"><span>Patience</span><input type="number" id="patience" min="1" value="3"></label>
+            <label class="control"><span>Seed</span><input type="number" id="train-seed" value="7"></label>
+            <label class="control"><span>Aux weight</span><input type="number" id="aux-weight" step="0.01" min="0" value="0.2"></label>
+            <label class="control"><span>Ranking weight</span><input type="number" id="ranking-weight" step="0.01" min="0" value="0.05"></label>
+            <label class="control"><span>MC negatives</span><input type="number" id="mc-negatives" min="1" max="16" value="2"></label>
+            <label class="control"><span>Max new tokens</span><input type="number" id="max-new-tokens" min="1" max="2048" value="80"></label>
+            <label class="control"><span>Device</span><select id="device"><option value="auto">Auto</option><option value="cpu">CPU</option><option value="cuda">CUDA</option><option value="mps">MPS</option></select></label>
+          </div>
+        </details>
+
+        <button type="button" class="primary" id="train-toggle">
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-label">Start training</span>
+        </button>
+      </div>
+
+      <div class="tab-pane" id="interpret-controls">
+        <label class="control span-2">
+          <span>Run</span>
+          <select id="analysis-job"><option value="">No completed run</option></select>
+        </label>
+        <div class="control-grid">
+          <label class="control"><span>Max examples</span><input type="number" id="analysis-examples" min="8" max="1024" value="96"></label>
+          <label class="control"><span>Probe alpha</span><input type="number" id="probe-alpha" step="0.1" min="0" value="1"></label>
+          <label class="control"><span>Attention example</span><input type="number" id="attention-example" min="0" value="0"></label>
+          <label class="control"><span>PCA dims</span><select id="pca-dim"><option value="2">2D</option><option value="3" selected>3D</option></select></label>
+          <label class="control"><span>Top neurons</span><input type="number" id="top-neurons" min="1" max="128" value="12"></label>
+        </div>
+        <button type="button" class="primary" id="run-analysis">
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-label">Run probes & maps</span>
+        </button>
+        <div class="form-hint">Requires a run with a best checkpoint.</div>
+      </div>
+    </aside>
+
+    <section class="lab-content">
+      <div id="lab-error" class="banner error hidden"></div>
+
+      <div class="tab-pane active" id="train-view">
+        <div class="metrics-grid lab-metrics">
+          <article class="metric-card"><div class="metric-label">Status</div><div class="metric-value metric-value-small" id="run-status">idle</div><div class="metric-note" id="run-id">no run</div></article>
+          <article class="metric-card"><div class="metric-label">Best val loss</div><div class="metric-value accent-cyan" id="best-val">—</div><div class="metric-note" id="best-val-note">waiting for training</div></article>
+          <article class="metric-card"><div class="metric-label">Parameters</div><div class="metric-value" id="param-count">—</div><div class="metric-note" id="param-note">custom transformer</div></article>
+          <article class="metric-card"><div class="metric-label">Progress</div><div class="metric-value" id="run-progress">0%</div><div class="metric-note" id="progress-note">epoch 0</div></article>
+        </div>
+
+        <div class="lab-grid">
+          <article class="panel plot-card span-2">
+            <div class="panel-heading compact"><div><span class="eyebrow">LIVE</span><h2>Training loss</h2></div><span class="chip chip-mono" id="train-step">step 0</span></div>
+            <div id="loss-plot" class="plot plot-tall"><div class="plot-placeholder">Start a run to see live loss.</div></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading compact"><div><span class="eyebrow">VALIDATION</span><h2>Metrics</h2></div></div>
+            <div id="val-metrics" class="metric-list"><span class="muted">No validation yet.</span></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading compact"><div><span class="eyebrow">SAMPLES</span><h2>Generated continuations</h2></div></div>
+            <div class="stream-label">inference continuation</div>
+            <pre class="stream" id="sample-infer">—</pre>
+            <div class="stream-label">generation continuation</div>
+            <pre class="stream" id="sample-generate">—</pre>
+          </article>
+        </div>
+
+        <article class="panel prediction-panel">
+          <div class="panel-heading compact">
+            <div><span class="eyebrow">LIVE VALIDATION</span><h2>What the model sees and predicts</h2></div>
+            <span class="chip chip-mono">input cloud · true target · prediction</span>
+          </div>
+          <div id="prediction-pairs" class="prediction-grid">
+            <span class="muted">Validation pairs appear after the first epoch.</span>
+          </div>
+        </article>
+
+        <article class="panel runs-panel">
+          <div class="panel-heading compact"><div><span class="eyebrow">HISTORY</span><h2>Runs</h2></div><button type="button" class="ghost small" id="refresh-runs">refresh</button></div>
+          <div id="run-list" class="run-list"><span class="muted">No runs yet.</span></div>
+        </article>
+      </div>
+
+      <div class="tab-pane" id="interpret-view">
+        <div class="metrics-grid lab-metrics">
+          <article class="metric-card"><div class="metric-label">Best structure probe</div><div class="metric-value accent-cyan" id="probe-structure">—</div><div class="metric-note">logistic accuracy</div></article>
+          <article class="metric-card"><div class="metric-label">Best Betti probe</div><div class="metric-value" id="probe-betti">—</div><div class="metric-note">ridge R²</div></article>
+          <article class="metric-card"><div class="metric-label">Layers analyzed</div><div class="metric-value" id="probe-layers">—</div><div class="metric-note">embedding + blocks</div></article>
+          <article class="metric-card"><div class="metric-label">Examples</div><div class="metric-value" id="probe-examples">—</div><div class="metric-note">train / val</div></article>
+        </div>
+
+        <article class="panel prediction-panel">
+          <div class="panel-heading compact">
+            <div><span class="eyebrow">FRESH TEST</span><h2>Generate clouds and ask the model</h2></div>
+            <span class="chip chip-mono">true vs predicted</span>
+          </div>
+          <div class="fresh-controls">
+            <label class="control"><span>Count</span><input type="number" id="fresh-count" min="1" max="24" value="6"></label>
+            <label class="control"><span>Points</span><input type="number" id="fresh-points" min="8" max="512" value="32"></label>
+            <label class="control"><span>Ambient</span><input type="number" id="fresh-ambient" min="2" max="12" value="3"></label>
+            <label class="control"><span>Seed</span><input type="number" id="fresh-seed" value="100"></label>
+            <label class="control"><span>Structure</span><select id="fresh-structure"></select></label>
+            <label class="control checkbox"><input type="checkbox" id="fresh-mix" checked><span>Mix structures</span></label>
+            <label class="control checkbox"><input type="checkbox" id="fresh-distort" checked><span>Random distortions</span></label>
+            <button type="button" class="primary" id="run-predictions">
+              <span class="btn-spinner" aria-hidden="true"></span>
+              <span class="btn-label">Generate & predict</span>
+            </button>
+          </div>
+          <div id="fresh-predictions" class="prediction-grid">
+            <span class="muted">Generate fresh clouds to compare true and predicted targets.</span>
+          </div>
+        </article>
+
+        <div class="lab-grid">
+          <article class="panel plot-card">
+            <div class="panel-heading compact"><div><span class="eyebrow">DECODABILITY</span><h2>Probe scores</h2></div></div>
+            <div id="probe-plot" class="plot"><div class="plot-placeholder">Run probes to see layer-wise scores.</div></div>
+          </article>
+
+          <article class="panel plot-card">
+            <div class="panel-heading compact"><div><span class="eyebrow">CAUSAL CANDIDATES</span><h2>Top neurons</h2></div></div>
+            <div id="top-neuron-list" class="metric-list"><span class="muted">Run probes to rank neurons.</span></div>
+          </article>
+
+          <article class="panel plot-card span-2">
+            <div class="panel-heading compact">
+              <div><span class="eyebrow">LINEAR READOUT</span><h2>Probe weight heatmap</h2></div>
+              <label class="inline-control"><span>Layer</span><select id="probe-layer"></select></label>
+            </div>
+            <div id="probe-heatmap" class="plot"><div class="plot-placeholder">Probe weights appear here.</div></div>
+          </article>
+
+          <article class="panel plot-card">
+            <div class="panel-heading compact">
+              <div><span class="eyebrow">LATENT</span><h2>Residual projection</h2></div>
+              <label class="inline-control"><span>Layer</span><select id="latent-layer"></select></label>
+            </div>
+            <div id="latent-plot" class="plot"><div class="plot-placeholder">PCA projection appears here.</div></div>
+          </article>
+
+          <article class="panel plot-card">
+            <div class="panel-heading compact"><div><span class="eyebrow">NEURONS</span><h2>Layer × neuron activity</h2></div></div>
+            <div id="neuron-plot" class="plot"><div class="plot-placeholder">Neuron map appears here.</div></div>
+          </article>
+
+          <article class="panel plot-card span-2">
+            <div class="panel-heading compact">
+              <div><span class="eyebrow">ATTENTION</span><h2>What the boundary token reads</h2></div>
+              <label class="inline-control"><span>Head</span><select id="attention-head"></select></label>
+            </div>
+            <div id="attention-plot" class="plot"><div class="plot-placeholder">Attention map appears here.</div></div>
+          </article>
+
+          <article class="panel plot-card span-2">
+            <div class="panel-heading compact"><div><span class="eyebrow">FFN</span><h2>Boundary-token neuron activations</h2></div><label class="inline-control"><span>Layer</span><select id="ffn-layer"></select></label></div>
+            <div id="ffn-plot" class="plot"><div class="plot-placeholder">FFN activation appears here.</div></div>
+          </article>
+        </div>
+      </div>
+
+      <footer class="footer">
+        <span>Custom transformer · multi-task training</span>
+        <span>Probes are decodability, not causality</span>
+        <span id="lab-footer-state">ready</span>
+      </footer>
+    </section>
+  </main>

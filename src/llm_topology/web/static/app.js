@@ -1,3 +1,5 @@
+import { applyById, collectById, loadUIState, saveUIState } from "./state.js";
+
 const state = {
   catalog: null,
   last: null,
@@ -126,6 +128,24 @@ async function loadCatalog() {
 
 function selectedTargetNames() {
   return $$(".target-check:checked").map((input) => input.dataset.block);
+}
+
+function applyTargetBlockState(names) {
+  if (!Array.isArray(names) || !names.length) return;
+  const selected = new Set(names);
+  $$(".target-check").forEach((input) => {
+    input.checked = selected.has(input.dataset.block);
+  });
+}
+
+function persistDataState() {
+  saveUIState({
+    dataForm: collectById("#generate-form"),
+    targetBlocks: selectedTargetNames(),
+    lastBatch: state.batch,
+    selected: state.selected,
+    batchWarnings: state.batchWarnings,
+  });
 }
 
 function renderTargetBlocks() {
@@ -284,6 +304,7 @@ async function generate() {
     state.selected = 0;
     renderGallery(state.batch);
     renderSelection();
+    persistDataState();
     setStatus("ready");
   } catch (error) {
     showError(error.message || String(error));
@@ -398,6 +419,7 @@ function renderSelection() {
   state.last = state.batch[state.selected];
   render(state.last);
   updateGallerySelection();
+  saveUIState({ selected: state.selected });
 }
 
 function renderMetrics(data) {
@@ -764,6 +786,12 @@ async function boot() {
     showError(`Could not load catalog: ${error.message}`);
     return;
   }
+  const saved = await loadUIState();
+  applyById(saved.dataForm || {});
+  applyTargetBlockState(saved.targetBlocks);
+  syncStructureVisibility();
+  syncMethodVisibility();
+  syncEpsilonVisibility();
   $("#structure-select").addEventListener("change", syncStructureVisibility);
   $("#method-select").addEventListener("change", syncMethodVisibility);
   $("#auto-epsilon").addEventListener("change", syncEpsilonVisibility);
@@ -788,7 +816,20 @@ async function boot() {
       generate();
     }
   });
-  await generate();
+  const form = $("#generate-form");
+  form.addEventListener("input", persistDataState);
+  form.addEventListener("change", persistDataState);
+  $("#target-blocks").addEventListener("change", persistDataState);
+  if (saved.lastBatch && Array.isArray(saved.lastBatch) && saved.lastBatch.length) {
+    state.batch = saved.lastBatch;
+    state.selected = Number(saved.selected) || 0;
+    state.batchWarnings = saved.batchWarnings || [];
+    renderGallery(state.batch);
+    renderSelection();
+    setStatus("restored");
+  } else {
+    await generate();
+  }
 }
 
 boot();

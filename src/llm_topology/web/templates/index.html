@@ -33,12 +33,12 @@
   </header>
 
   <nav class="topnav" aria-label="Primary">
-    <a class="nav-tab active" href="/">Data Studio</a>
-    <a class="nav-tab" href="/lab">Model Lab</a>
-    <a class="nav-tab" href="/lab#interpret">Interpretability</a>
+    <button type="button" class="nav-tab active" data-app-tab="data" id="nav-data">Data Studio</button>
+    <button type="button" class="nav-tab" data-app-tab="lab" id="nav-lab">Model Lab</button>
+    <a class="nav-tab" href="#interpret" data-app-tab="interpret" id="interpret-nav">Interpretability</a>
   </nav>
 
-  <main class="layout">
+  <main class="layout app-view" id="data-view">
     <aside class="panel sidebar">
       <div class="panel-heading">
         <div>
@@ -302,10 +302,16 @@
     </section>
   </main>
 
+  <section class="app-view hidden" id="lab-view">
+    {% include "lab_body.html" %}
+  </section>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/temml/dist/temml.min.js"></script>
-  <script src="/static/app.js"></script>
+  <script type="module" src="/static/shell.js"></script>
+  <script type="module" src="/static/app.js"></script>
+  <script type="module" src="/static/lab.js"></script>
 </body>
 </html>

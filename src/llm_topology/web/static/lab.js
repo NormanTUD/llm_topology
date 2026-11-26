@@ -1,3 +1,5 @@
+import { applyById, collectById, loadUIState, saveUIState } from "./state.js";
+
 const labState = {
   catalog: null,
   jobId: null,
@@ -6,6 +8,7 @@ const labState = {
   analysis: null,
   runs: [],
   view: "train",
+  running: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -170,6 +173,19 @@ async function loadCatalog() {
   setValue("max-new-tokens", defaultTrain.max_new_tokens);
   setValue("device", defaultTrain.device);
 
+  const freshSelect = $("#fresh-structure");
+  if (freshSelect) {
+    freshSelect.innerHTML = "";
+    for (const structure of labState.catalog.structures) {
+      if (structure.value === "disjoint") continue;
+      const option = document.createElement("option");
+      option.value = structure.value;
+      option.textContent = structure.label;
+      freshSelect.appendChild(option);
+    }
+    freshSelect.value = "torus";
+  }
+
   setValue("analysis-examples", labState.catalog.analysis_defaults.max_examples);
   setValue("probe-alpha", labState.catalog.analysis_defaults.probe_alpha);
   setValue("attention-example", labState.catalog.analysis_defaults.attention_example);
@@ -180,6 +196,27 @@ async function loadCatalog() {
 function setValue(id, value) {
   const element = document.getElementById(id);
   if (element) element.value = String(value);
+}
+
+function selectedTrainStructures() {
+  return $$(".train-structure:checked").map((input) => input.value);
+}
+
+function applyTrainStructures(values) {
+  if (!Array.isArray(values) || !values.length) return;
+  const selected = new Set(values);
+  $$(".train-structure").forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+function persistLabState() {
+  saveUIState({
+    labForm: collectById(".lab-sidebar"),
+    freshForm: collectById(".fresh-controls"),
+    trainStructures: selectedTrainStructures(),
+    jobId: labState.jobId,
+  });
 }
 
 function schemaForMaxDim(maxDim) {
@@ -273,10 +310,10 @@ function buildSpec() {
 
 async function startTraining() {
   clearError();
-  const button = $("#start-training");
+  const button = $("#train-toggle");
   button.disabled = true;
   button.classList.add("loading");
-  $(".btn-label").textContent = "Preparing dataset…";
+  button.querySelector(".btn-label").textContent = "Preparing dataset…";
   try {
     const spec = buildSpec();
     const job = await fetchJSON("/api/train/start", {
@@ -286,27 +323,49 @@ async function startTraining() {
     labState.jobId = job.id;
     labState.job = job;
     labState.analysis = null;
+    labState.running = true;
+    persistLabState();
     renderJob(job);
     schedulePoll(250);
     toast(`Run ${job.id} started`);
   } catch (error) {
     setError(error.message);
     toast(error.message, true);
+    labState.running = false;
+    setTrainButton(false);
   } finally {
     button.disabled = false;
     button.classList.remove("loading");
-    $(".btn-label").textContent = "Start training";
   }
 }
 
 async function stopTraining() {
   if (!labState.jobId) return;
+  const button = $("#train-toggle");
+  button.disabled = true;
+  button.querySelector(".btn-label").textContent = "Stopping…";
   try {
     await fetchJSON(`/api/train/stop/${labState.jobId}`, { method: "POST" });
     toast("Stop requested");
   } catch (error) {
     toast(error.message, true);
+    button.disabled = false;
+    setTrainButton(labState.running);
   }
+}
+
+function toggleTraining() {
+  if (labState.running) stopTraining();
+  else startTraining();
+}
+
+function setTrainButton(running) {
+  labState.running = running;
+  const button = $("#train-toggle");
+  if (!button) return;
+  button.classList.toggle("danger", running);
+  button.querySelector(".btn-label").textContent = running ? "Stop training" : "Start training";
+  button.disabled = false;
 }
 
 function schedulePoll(delay = 900) {
@@ -322,6 +381,7 @@ async function pollStatus() {
     renderJob(job);
     if (["completed", "early_stopped", "stopped", "failed"].includes(job.status)) {
       window.clearTimeout(labState.pollTimer);
+      setTrainButton(false);
       refreshRuns();
       return;
     }
@@ -333,6 +393,8 @@ async function pollStatus() {
 }
 
 function renderJob(job) {
+  const running = ["queued", "preparing", "running"].includes(job.status);
+  setTrainButton(running);
   $("#run-status").textContent = job.status;
   $("#run-id").textContent = job.id ? `run ${job.id}` : "no run";
   $("#best-val").textContent = formatNumber(job.best_val_loss, 4);
@@ -361,63 +423,181 @@ function renderJob(job) {
   }
   renderLoss(job);
   renderValMetrics(job);
+  renderPredictionPairs(job);
   populateAnalysisJob(job);
 }
 
 function renderLoss(job) {
   const element = $("#loss-plot");
   if (!plotlyReady()) return;
+  element.innerHTML = "";
   const history = job.history || [];
+  const batchHistory = job.loss_history || [];
   const current = job.current || {};
-  const steps = history.map((entry) => entry.epoch);
+  const batchSteps = batchHistory.map((entry) => entry.step);
+  const batchLosses = batchHistory.map((entry) => entry.loss);
+  const batchCe = batchHistory.map((entry) => entry.ce);
+  const epochSteps = history.map((entry) => entry.step);
   const trainLoss = history.map((entry) => entry.train_loss);
   const valLoss = history.map((entry) => entry.val_loss);
-  const trainCe = history.map((entry) => entry.train_ce);
-  const traces = [
-    {
-      type: "scatter",
-      mode: "lines+markers",
-      name: "train loss",
-      x: steps,
-      y: trainLoss,
-      line: { color: "#fb923c", width: 2 },
-      marker: { size: 5 },
-    },
-    {
-      type: "scatter",
-      mode: "lines+markers",
-      name: "val loss",
-      x: steps,
-      y: valLoss,
-      line: { color: "#5eead4", width: 2 },
-      marker: { size: 5 },
-    },
-    {
+  const traces = [];
+  if (batchHistory.length) {
+    traces.push({
       type: "scatter",
       mode: "lines",
-      name: "train CE",
-      x: steps,
-      y: trainCe,
+      name: "batch loss",
+      x: batchSteps,
+      y: batchLosses,
+      line: { color: "#fb923c", width: 1.6 },
+    });
+    traces.push({
+      type: "scatter",
+      mode: "lines",
+      name: "batch CE",
+      x: batchSteps,
+      y: batchCe,
       line: { color: "#a78bfa", width: 1, dash: "dot" },
-    },
-  ];
-  if (current.epoch && current.loss) {
+    });
+  }
+  if (history.length) {
+    traces.push({
+      type: "scatter",
+      mode: "lines+markers",
+      name: "epoch train loss",
+      x: epochSteps,
+      y: trainLoss,
+      line: { color: "#fdba74", width: 1.4 },
+      marker: { size: 4 },
+    });
+    traces.push({
+      type: "scatter",
+      mode: "lines+markers",
+      name: "epoch val loss",
+      x: epochSteps,
+      y: valLoss,
+      line: { color: "#5eead4", width: 2.2 },
+      marker: { size: 6 },
+    });
+  }
+  if (!traces.length && current.loss) {
     traces.push({
       type: "scatter",
       mode: "markers",
-      name: "live batch",
-      x: [current.epoch],
+      name: "live",
+      x: [current.step || 0],
       y: [current.loss],
-      marker: { color: "#f472b6", size: 7, symbol: "diamond" },
+      marker: { color: "#f472b6", size: 7 },
     });
+  }
+  if (!traces.length) {
+    element.innerHTML = '<div class="plot-placeholder">Start a run to see live loss.</div>';
+    return;
   }
   const layout = plotlyLayout({
     showlegend: true,
     legend: { orientation: "h", y: 1.08, x: 0, font: { size: 9 } },
-    xaxis: { title: "epoch", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
+    xaxis: { title: "step", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
     yaxis: { title: "loss", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
   });
   window.Plotly.newPlot(element, traces, layout, plotConfig());
+}
+
+function renderPredictionPairs(job) {
+  const container = $("#prediction-pairs");
+  const predictions =
+    (job.current && job.current.prediction_samples) ||
+    (job.history && job.history.length
+      ? job.history[job.history.length - 1].prediction_samples
+      : null) ||
+    [];
+  container.innerHTML = "";
+  if (!predictions.length) {
+    container.innerHTML = '<span class="muted">Validation pairs appear after the first epoch.</span>';
+    return;
+  }
+  for (const prediction of predictions) {
+    const card = document.createElement("div");
+    card.className = "prediction-card";
+    const head = document.createElement("div");
+    head.className = "prediction-head";
+    const name = document.createElement("strong");
+    name.textContent = `${prediction.task} · ${prediction.structure_name}`;
+    const status = document.createElement("span");
+    const correct = prediction.predicted_betti && prediction.true_betti &&
+      prediction.predicted_betti.slice(0, 3).join(",") === prediction.true_betti.slice(0, 3).join(",");
+    status.textContent = prediction.task === "infer" ? (correct ? "match" : "readout") : "generation";
+    status.style.color = correct ? "var(--cyan)" : "var(--muted)";
+    head.appendChild(name);
+    head.appendChild(status);
+    card.appendChild(head);
+
+    if (prediction.input_projection && prediction.input_projection.length) {
+      const mini = document.createElement("div");
+      mini.className = "prediction-mini";
+      card.appendChild(mini);
+      window.requestAnimationFrame(() => plotMiniPoints(mini, prediction.input_projection));
+    }
+    if (prediction.generated_projection && prediction.generated_projection.length) {
+      const mini = document.createElement("div");
+      mini.className = "prediction-mini";
+      mini.style.borderTop = "1px solid var(--line)";
+      card.appendChild(mini);
+      window.requestAnimationFrame(() => plotMiniPoints(mini, prediction.generated_projection));
+    }
+
+    const values = document.createElement("div");
+    values.className = "prediction-values";
+    if (prediction.task === "infer") {
+      const trueBetti = prediction.true_betti || [];
+      const predBetti = prediction.predicted_betti || [];
+      const trueRow = document.createElement("div");
+      trueRow.className = "true";
+      trueRow.innerHTML = `<span class="label">true</span> b=(${trueBetti.slice(0, 3).join(",")})`;
+      const predRow = document.createElement("div");
+      predRow.className = `predicted${correct ? "" : " bad"}`;
+      predRow.innerHTML = `<span class="label">pred</span> b=(${predBetti.slice(0, 3).join(",")})`;
+      values.appendChild(trueRow);
+      values.appendChild(predRow);
+      if (prediction.predicted_text) {
+        const text = document.createElement("div");
+        text.className = "prediction-condition";
+        text.textContent = prediction.predicted_text;
+        values.appendChild(text);
+      }
+    } else {
+      const condition = document.createElement("div");
+      condition.className = "prediction-condition";
+      condition.textContent = `condition: ${prediction.condition_text}`;
+      values.appendChild(condition);
+      const generated = document.createElement("div");
+      generated.className = "prediction-condition";
+      generated.textContent = `generated: ${prediction.generated_text}`;
+      values.appendChild(generated);
+    }
+    card.appendChild(values);
+    container.appendChild(card);
+  }
+}
+
+function plotMiniPoints(element, points) {
+  if (!plotlyReady() || !points || !points.length) return;
+  const trace = {
+    type: "scattergl",
+    mode: "markers",
+    x: points.map((point) => point[0]),
+    y: points.map((point) => point[1]),
+    marker: { size: 2.2, color: points.map((_, index) => index), colorscale: [[0, "#60a5fa"], [0.5, "#5eead4"], [1, "#fb923c"]], opacity: 0.85 },
+    hoverinfo: "skip",
+  };
+  const layout = {
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    xaxis: { visible: false, fixedrange: true },
+    yaxis: { visible: false, fixedrange: true, scaleanchor: "x", scaleratio: 1 },
+    showlegend: false,
+  };
+  window.Plotly.newPlot(element, [trace], layout, { responsive: true, displayModeBar: false });
 }
 
 function renderValMetrics(job) {
@@ -516,6 +696,7 @@ function renderRuns(runs) {
     item.addEventListener("click", () => {
       labState.jobId = run.id;
       labState.analysis = null;
+      persistLabState();
       pollStatus();
       renderRuns(labState.runs);
     });
@@ -603,6 +784,7 @@ function populateLayerSelects(analysis) {
 
 function renderProbeScores(analysis) {
   if (!plotlyReady()) return;
+  $("#probe-plot").innerHTML = "";
   const layers = analysis.probes.map((probe) => probe.layer);
   const structure = analysis.probes.map((probe) =>
     Number.isFinite(probe.structure_accuracy) ? probe.structure_accuracy : null
@@ -635,6 +817,7 @@ function renderProbeScores(analysis) {
 
 function renderProbeHeatmap(analysis) {
   if (!plotlyReady()) return;
+  $("#probe-heatmap").innerHTML = "";
   const layer = intValue("probe-layer", 0, 1024, analysis.probes.length - 1);
   const probe = analysis.probes.find((entry) => entry.layer === layer) || analysis.probes[0];
   const targets = Object.keys(probe.r2);
@@ -681,6 +864,7 @@ function renderTopNeurons(analysis) {
 
 function renderLatent(analysis) {
   if (!plotlyReady()) return;
+  $("#latent-plot").innerHTML = "";
   const layer = intValue("latent-layer", 0, 1024, analysis.probes.length - 1);
   const projection = analysis.projection;
   const coords = projection.coordinates[layer] || [];
@@ -702,17 +886,28 @@ function renderLatent(analysis) {
     text: names,
     hovertemplate: "%{text}<extra></extra>",
   };
-  const layout = plotlyLayout({
-    margin: dims === 3 ? { l: 0, r: 0, t: 0, b: 0 } : { l: 40, r: 16, t: 16, b: 36 },
-    scene: dims === 3 ? { bgcolor: "rgba(0,0,0,0)", xaxis: { visible: false }, yaxis: { visible: false }, zaxis: { visible: false }, aspectmode: "data" } : undefined,
-    xaxis: dims === 3 ? undefined : { title: "PC1", gridcolor: "rgba(148,163,184,.08)" },
-    yaxis: dims === 3 ? undefined : { title: "PC2", gridcolor: "rgba(148,163,184,.08)" },
-  });
+  const layout = dims === 3
+    ? plotlyLayout({
+        margin: { l: 0, r: 0, t: 0, b: 0 },
+        scene: {
+          bgcolor: "rgba(0,0,0,0)",
+          xaxis: { visible: false },
+          yaxis: { visible: false },
+          zaxis: { visible: false },
+          aspectmode: "data",
+        },
+      })
+    : plotlyLayout({
+        margin: { l: 40, r: 16, t: 16, b: 36 },
+        xaxis: { title: "PC1", gridcolor: "rgba(148,163,184,.08)" },
+        yaxis: { title: "PC2", gridcolor: "rgba(148,163,184,.08)" },
+      });
   window.Plotly.newPlot($("#latent-plot"), [trace], layout, plotConfig());
 }
 
 function renderNeuronMap(analysis) {
   if (!plotlyReady()) return;
+  $("#neuron-plot").innerHTML = "";
   const z = analysis.neuron_maps.normalized;
   const layout = plotlyLayout({
     margin: { l: 50, r: 12, t: 12, b: 34 },
@@ -729,6 +924,7 @@ function renderNeuronMap(analysis) {
 
 function renderAttention(analysis) {
   if (!plotlyReady()) return;
+  $("#attention-plot").innerHTML = "";
   const attention = analysis.attention?.attention;
   if (!attention || !attention.length) return;
   const head = intValue("attention-head", 0, 32, 0);
@@ -761,6 +957,7 @@ function renderAttention(analysis) {
 
 function renderFFN(analysis) {
   if (!plotlyReady()) return;
+  $("#ffn-plot").innerHTML = "";
   const ffn = analysis.attention?.ffn_activation;
   if (!ffn || !ffn.length) return;
   const layer = intValue("ffn-layer", 0, 1024, ffn.length - 1);
@@ -784,6 +981,152 @@ function renderFFN(analysis) {
   window.Plotly.newPlot($("#ffn-plot"), traces, layout, plotConfig());
 }
 
+function freshTransform(seed, distort) {
+  if (!distort) {
+    return {
+      rotation_deg: [0, 0, 0],
+      stretch: [1, 1, 1],
+      twist: 0,
+      shear: [0, 0, 0],
+      bend: 0,
+      warp: 0,
+      translation: [0, 0, 0],
+      noise: 0,
+      permute: false,
+      seed: seed + 1,
+    };
+  }
+  const rng = (() => {
+    let value = (seed + 1) % 2147483647;
+    if (value <= 0) value += 2147483646;
+    return () => {
+      value = (value * 16807) % 2147483647;
+      return (value - 1) / 2147483646;
+    };
+  })();
+  const signed = (scale) => (rng() * 2 - 1) * scale;
+  return {
+    rotation_deg: [signed(180), signed(180), signed(180)],
+    stretch: [1 + signed(0.18), 1 + signed(0.18), 1 + signed(0.18)],
+    twist: signed(0.5),
+    shear: [signed(0.35), signed(0.35), signed(0.35)],
+    bend: signed(0.4),
+    warp: signed(0.4),
+    translation: [0, 0, 0],
+    noise: 0,
+    permute: true,
+    seed: seed + 1,
+  };
+}
+
+async function runFreshPredictions() {
+  const jobId = $("#analysis-job").value || labState.jobId;
+  if (!jobId) {
+    toast("Select a run with a checkpoint first", true);
+    return;
+  }
+  const button = $("#run-predictions");
+  button.disabled = true;
+  button.classList.add("loading");
+  button.querySelector(".btn-label").textContent = "Predicting…";
+  try {
+    const count = intValue("fresh-count", 1, 24, 6);
+    const ambient = intValue("fresh-ambient", 2, 12, 3);
+    const seed = intValue("fresh-seed", -2147483648, 2147483647, 100);
+    const mix = $("#fresh-mix").checked;
+    const distort = $("#fresh-distort").checked;
+    const structures = mix
+      ? labState.catalog.structures
+          .filter((structure) => structure.value !== "disjoint")
+          .filter((structure) => structure.needs_ambient <= ambient)
+          .map((structure) => structure.value)
+      : null;
+    const spec = {
+      structure: $("#fresh-structure").value,
+      n_points: intValue("fresh-points", 8, 512, 32),
+      ambient_dim: ambient,
+      copies: 1,
+      genus: 2,
+      seed,
+      params: {},
+      transform: freshTransform(seed, distort),
+      filtration: {
+        ...labState.catalog.data_defaults.filtration,
+        epsilon: null,
+        max_edge_length: null,
+      },
+      target_schema: labState.catalog.data_defaults.target_schema,
+    };
+    const result = await fetchJSON(`/api/predict/${jobId}`, {
+      method: "POST",
+      body: JSON.stringify({ spec, count, structures }),
+    });
+    renderFreshPredictions(result.items || [], result.warnings || []);
+    toast(`Predicted ${result.count} clouds`);
+  } catch (error) {
+    setError(error.message);
+    toast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.classList.remove("loading");
+    button.querySelector(".btn-label").textContent = "Generate & predict";
+  }
+}
+
+function renderFreshPredictions(items, warnings) {
+  const container = $("#fresh-predictions");
+  container.innerHTML = "";
+  for (const warning of warnings) {
+    const note = document.createElement("div");
+    note.className = "note";
+    note.textContent = warning;
+    container.appendChild(note);
+  }
+  if (!items.length) {
+    container.innerHTML = '<span class="muted">No predictions returned.</span>';
+    return;
+  }
+  for (const item of items) {
+    const card = document.createElement("div");
+    card.className = "prediction-card";
+    const head = document.createElement("div");
+    head.className = "prediction-head";
+    const name = document.createElement("strong");
+    name.textContent = item.structure_name || item.sample?.structure_name || "cloud";
+    const status = document.createElement("span");
+    const trueBetti = item.true_groups?.[0] || [];
+    const predBetti = item.predicted_groups?.[0] || [];
+    const correct = trueBetti.slice(0, 3).join(",") === predBetti.slice(0, 3).join(",");
+    status.textContent = correct ? "match" : "miss";
+    status.style.color = correct ? "var(--cyan)" : "var(--red)";
+    head.appendChild(name);
+    head.appendChild(status);
+    card.appendChild(head);
+    if (item.projection?.length) {
+      const mini = document.createElement("div");
+      mini.className = "prediction-mini";
+      card.appendChild(mini);
+      window.requestAnimationFrame(() => plotMiniPoints(mini, item.projection));
+    }
+    const values = document.createElement("div");
+    values.className = "prediction-values";
+    const trueRow = document.createElement("div");
+    trueRow.className = "true";
+    trueRow.innerHTML = `<span class="label">true</span> b=(${trueBetti.slice(0, 3).join(",")})`;
+    const predRow = document.createElement("div");
+    predRow.className = `predicted${correct ? "" : " bad"}`;
+    predRow.innerHTML = `<span class="label">pred</span> b=(${predBetti.slice(0, 3).join(",")})`;
+    values.appendChild(trueRow);
+    values.appendChild(predRow);
+    const predicted = document.createElement("div");
+    predicted.className = "prediction-condition";
+    predicted.textContent = item.predicted_text || "";
+    values.appendChild(predicted);
+    card.appendChild(values);
+    container.appendChild(card);
+  }
+}
+
 function setTab(tab) {
   labState.view = tab;
   $$(".lab-tab").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
@@ -794,18 +1137,22 @@ function setTab(tab) {
 }
 
 function bindEvents() {
-  $("#start-training").addEventListener("click", startTraining);
-  $("#stop-training").addEventListener("click", stopTraining);
+  $("#train-toggle").addEventListener("click", toggleTraining);
   $("#refresh-runs").addEventListener("click", refreshRuns);
   $("#run-analysis").addEventListener("click", runAnalysis);
+  $("#analysis-job").addEventListener("change", () => {
+    labState.jobId = $("#analysis-job").value || labState.jobId;
+    persistLabState();
+  });
+  $(".lab-sidebar").addEventListener("input", persistLabState);
+  $(".lab-sidebar").addEventListener("change", persistLabState);
+  $(".fresh-controls").addEventListener("input", persistLabState);
+  $(".fresh-controls").addEventListener("change", persistLabState);
+  $("#run-predictions").addEventListener("click", runFreshPredictions);
   $$(".lab-tab").forEach((button) => {
     button.addEventListener("click", () => setTab(button.dataset.tab));
   });
-  $("#interpret-nav").addEventListener("click", (event) => {
-    event.preventDefault();
-    setTab("interpret");
-    history.replaceState(null, "", "#interpret");
-  });
+  window.addEventListener("llm-lab-tab", (event) => setTab(event.detail));
   $("#probe-layer").addEventListener("change", () => {
     if (labState.analysis) {
       renderProbeHeatmap(labState.analysis);
@@ -836,11 +1183,20 @@ async function boot() {
   }
   try {
     await loadCatalog();
+    const saved = await loadUIState();
+    applyById(saved.labForm || {});
+    applyById(saved.freshForm || {});
+    applyTrainStructures(saved.trainStructures);
     await refreshRuns();
-    const running = labState.runs.find((run) => ["preparing", "running", "queued"].includes(run.status));
-    if (running) {
-      labState.jobId = running.id;
+    if (saved.jobId) {
+      labState.jobId = saved.jobId;
       pollStatus();
+    } else {
+      const running = labState.runs.find((run) => ["preparing", "running", "queued"].includes(run.status));
+      if (running) {
+        labState.jobId = running.id;
+        pollStatus();
+      }
     }
   } catch (error) {
     setError(error.message);

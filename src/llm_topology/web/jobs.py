@@ -8,8 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from ..analysis.probes import analyze_checkpoint
-from ..model.config import AnalysisSpec, TrainingSpec
-from ..tokenizer import NumericTokenizer
+from ..config import DatasetSpec, StructureKind
+from ..model.config import AnalysisSpec, DataBuildSpec, TrainingSpec
+from ..model.train import load_checkpoint
+from ..pipeline import generate_dataset
+from ..tokenizer import NumericTokenizer, parse_target_groups, serialize_points
 
 
 class JobError(RuntimeError):
@@ -260,6 +263,97 @@ class JobManager:
         result["analysis_path"] = str(output)
         print(f"[{job_id}] analysis saved to {output}", flush=True)
         return result
+
+    def predict(
+        self,
+        job_id: str,
+        spec: DatasetSpec,
+        *,
+        count: int,
+        structures: list[StructureKind] | None = None,
+    ) -> dict[str, Any]:
+        job = self.get(job_id)
+        checkpoint = job.best_checkpoint
+        if not checkpoint or not Path(checkpoint).exists():
+            raise JobError("this job has no best checkpoint yet")
+        import torch
+
+        from ..model.train import resolve_device
+
+        device = resolve_device("cpu")
+        model, tokenizer, checkpoint_data = load_checkpoint(checkpoint, device=str(device))
+        data_spec = DataBuildSpec.model_validate(checkpoint_data["data_spec"])
+        schema = data_spec.target_schema
+        max_new_tokens = int(checkpoint_data["train_spec"].get("max_new_tokens", 64))
+        chosen = structures or [spec.structure]
+        items: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        for index in range(count):
+            structure = chosen[index % len(chosen)]
+            eval_spec = spec.model_copy(
+                update={
+                    "seed": spec.seed + index,
+                    "structure": structure,
+                    "target_schema": schema,
+                }
+            )
+            try:
+                response = generate_dataset(eval_spec)
+                point_text = serialize_points(response.sample.points, precision=data_spec.precision)
+                point_ids = tokenizer.encode(point_text)
+                prompt_ids = [
+                    tokenizer.token_to_id["<infer>"],
+                    *point_ids,
+                    tokenizer.eot_id,
+                ]
+                available = model.spec.max_seq_len - len(prompt_ids)
+                if available <= 8:
+                    warnings.append(
+                        f"Cloud {index + 1} skipped: prompt length {len(prompt_ids)} "
+                        f"exceeds model context {model.spec.max_seq_len}."
+                    )
+                    continue
+                generate_tokens = max(8, min(max_new_tokens, available))
+                prompt = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+                generated = model.generate(
+                    prompt,
+                    max_new_tokens=generate_tokens,
+                    eos_id=tokenizer.eos_id,
+                )
+                continuation = generated[0, len(prompt_ids) :].tolist()
+                predicted_text = tokenizer.decode(continuation).replace("<eos>", "").strip()
+                predicted_groups = None
+                parse_error = None
+                try:
+                    predicted_groups = parse_target_groups(predicted_text, schema)
+                except Exception as exc:
+                    parse_error = str(exc)
+                items.append(
+                    {
+                        "sample": response.sample.model_dump(mode="json"),
+                        "projection": response.projection,
+                        "reference_projection": response.reference_projection,
+                        "reference_structure_name": response.reference_structure_name,
+                        "true_groups": response.target_groups,
+                        "true_text": response.target_text,
+                        "predicted_text": predicted_text,
+                        "predicted_groups": predicted_groups,
+                        "parse_error": parse_error,
+                        "task": "infer",
+                        "structure_name": response.sample.structure_name,
+                    }
+                )
+            except Exception as exc:
+                warnings.append(f"Cloud {index + 1} failed: {type(exc).__name__}: {exc}")
+        print(
+            f"[{job_id}] prediction batch count={len(items)} warnings={len(warnings)}", flush=True
+        )
+        return {
+            "items": items,
+            "warnings": warnings,
+            "count": len(items),
+            "target_schema": schema.model_dump(mode="json"),
+        }
 
 
 MANAGER = JobManager()

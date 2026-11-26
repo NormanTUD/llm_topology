@@ -93,12 +93,7 @@ def _pad_rows(rows: list[list[int]], pad_id: int) -> torch.Tensor:
 
 
 def _parse_generated_points(text: str, ambient_dim: int) -> list[list[float]]:
-    cleaned = (
-        text.replace("<eos>", "")
-        .replace("<pad>", "")
-        .replace("<endoftext>", "")
-        .strip()
-    )
+    cleaned = text.replace("<eos>", "").replace("<pad>", "").replace("<endoftext>", "").strip()
     points: list[list[float]] = []
     for chunk in cleaned.split(";"):
         values = []
@@ -362,14 +357,10 @@ class Trainer:
                 parse_error = str(exc)
             projection, _ = project_for_display(example.points)
             predicted_betti = (
-                predicted_groups[0]
-                if predicted_groups and len(predicted_groups) > 0
-                else None
+                predicted_groups[0] if predicted_groups and len(predicted_groups) > 0 else None
             )
             predicted_ph = (
-                predicted_groups[1]
-                if predicted_groups and len(predicted_groups) > 1
-                else None
+                predicted_groups[1] if predicted_groups and len(predicted_groups) > 1 else None
             )
             samples.append(
                 {
@@ -388,7 +379,9 @@ class Trainer:
                 }
             )
 
-        generation_examples = [example for example in self.bundle.val if example.task == "generate"][:1]
+        generation_examples = [
+            example for example in self.bundle.val if example.task == "generate"
+        ][:1]
         for example in generation_examples:
             prompt = torch.tensor([example.prefix_ids], dtype=torch.long, device=self.device)
             generated = self.model.generate(
@@ -399,7 +392,9 @@ class Trainer:
             continuation = generated[0, len(example.prefix_ids) :].tolist()
             generated_text = self.tokenizer.decode(continuation).replace("<eos>", "").strip()
             generated_points = _parse_generated_points(generated_text, self.spec.data.ambient_dim)
-            generated_projection, _ = project_for_display(generated_points) if generated_points else ([], "")
+            generated_projection, _ = (
+                project_for_display(generated_points) if generated_points else ([], "")
+            )
             samples.append(
                 {
                     "task": "generate",
@@ -540,7 +535,10 @@ class Trainer:
             if improved:
                 self.best_val_loss = val_metrics["val_loss"]
                 self._save_checkpoint(self.best_checkpoint, epoch=epoch, metrics=metrics)
-                print(f"{tag} checkpoint best.pt epoch={epoch} val={self.best_val_loss:.4f}", flush=True)
+                print(
+                    f"{tag} checkpoint best.pt epoch={epoch} val={self.best_val_loss:.4f}",
+                    flush=True,
+                )
                 stale_epochs = 0
             else:
                 stale_epochs += 1
