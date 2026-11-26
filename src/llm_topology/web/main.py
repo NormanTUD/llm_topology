@@ -25,6 +25,7 @@ from ..config import (
 )
 from ..datasets import STORE as DATASET_STORE
 from ..datasets import DatasetStoreError
+from ..limits import estimate_dataset, estimate_generation, estimate_training
 from ..model.config import AnalysisSpec, DataBuildSpec, ModelSpec, TrainConfig, TrainingSpec
 from ..pipeline import PipelineError, generate_dataset
 from ..tokenizer import (
@@ -207,6 +208,9 @@ async def generate(spec: DatasetSpec) -> DatasetResponse:
 
 @app.post("/api/generate/batch", response_model=BatchDatasetResponse)
 async def generate_batch(payload: BatchGenerateRequest) -> BatchDatasetResponse:
+    plausibility = estimate_generation(payload.spec, count=payload.count)
+    if plausibility["level"] == "block":
+        raise HTTPException(status_code=422, detail="; ".join(plausibility["warnings"]))
     items: list[DatasetResponse] = []
     warnings: list[str] = []
     if payload.mode == "mix":
@@ -286,6 +290,27 @@ async def parse_targets(payload: ParseTargetRequest) -> ParseTargetResponse:
     )
 
 
+@app.post("/api/estimate/generate")
+async def estimate_generate(payload: BatchGenerateRequest) -> dict[str, object]:
+    return estimate_generation(payload.spec, count=payload.count)
+
+
+@app.post("/api/estimate/dataset")
+async def estimate_dataset_endpoint(payload: DatasetCreateRequest) -> dict[str, object]:
+    return estimate_dataset(payload.data_spec)
+
+
+@app.post("/api/estimate/training")
+async def estimate_training_endpoint(spec: TrainingSpec) -> dict[str, object]:
+    meta = None
+    if spec.dataset_id:
+        try:
+            meta = DATASET_STORE.get_meta(spec.dataset_id)
+        except DatasetStoreError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return estimate_training(spec, dataset_meta=meta)
+
+
 @app.get("/api/datasets")
 async def list_datasets() -> list[dict[str, object]]:
     return DATASET_STORE.list()
@@ -293,6 +318,9 @@ async def list_datasets() -> list[dict[str, object]]:
 
 @app.post("/api/datasets")
 async def create_dataset(payload: DatasetCreateRequest) -> dict[str, object]:
+    plausibility = estimate_dataset(payload.data_spec)
+    if plausibility["level"] == "block":
+        raise HTTPException(status_code=422, detail="; ".join(plausibility["warnings"]))
     try:
         return DATASET_STORE.save(payload.name, payload.data_spec)
     except DatasetStoreError as exc:
@@ -325,6 +353,15 @@ async def get_dataset(dataset_id: str) -> dict[str, object]:
 
 @app.post("/api/train/start")
 async def start_training(spec: TrainingSpec) -> dict[str, object]:
+    meta = None
+    if spec.dataset_id:
+        try:
+            meta = DATASET_STORE.get_meta(spec.dataset_id)
+        except DatasetStoreError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    plausibility = estimate_training(spec, dataset_meta=meta)
+    if plausibility["level"] == "block":
+        raise HTTPException(status_code=422, detail="; ".join(plausibility["warnings"]))
     job = MANAGER.start(spec)
     return job.snapshot(include_history=False)
 

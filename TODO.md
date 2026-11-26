@@ -7,7 +7,7 @@
 - **Phase 1:** abgeschlossen (Custom Transformer + Training)
 - **Phase 2:** abgeschlossen (Probes + Heatmaps + Latent-PCA)
 - **Status:** Browser-GUI mit Data Studio, Model Lab und Interpretability
-- **Letzter Testlauf:** 97 Tests bestanden, Ruff und Formatierung sauber
+- **Letzter Testlauf:** 102 Tests bestanden, Ruff und Formatierung sauber
 - **Naechster Meilenstein:** OOD-/Invarianzmatrix, Ablation, Activation Patching
 
 Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
@@ -115,6 +115,10 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] GUI-Fix fuer totalPoints-TDZ und erneuter Save-Test
 - [x] Auto-Kontextfit im Dataset Builder
 - [x] GUI-Test: 1-5 Tori, 400 Punkte/Kopie, PH-Guard, Dataset-Save, Preview
+- [x] RAM-/VRAM-Schaetzung fuer Generate, Dataset und Training
+- [x] Warnungen und Blockieren bei kritischen Settings
+- [x] Start/Stop-Action-Bar oben, Dataset-Preview unter dem Loss
+- [x] Top-Action-Bars in Data Studio und Interpretability
 
 ## Phase 2 - Interpretierbarkeit
 

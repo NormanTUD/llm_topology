@@ -207,11 +207,16 @@
           <span class="btn-spinner" aria-hidden="true"></span>
           <span class="btn-label">Generate point cloud</span>
         </button>
+        <div id="data-plausibility" class="plausibility"></div>
         <div class="form-hint">Ctrl / Cmd + Enter to regenerate</div>
       </form>
     </aside>
 
     <section class="content">
+      <div class="action-bar">
+        <button type="button" class="primary" id="top-generate">Generate batch</button>
+        <button type="button" class="ghost" id="top-build-dataset">Build dataset</button>
+      </div>
       <div id="error-banner" class="banner error hidden"></div>
       <div id="warning-list" class="warning-list"></div>
       <div id="note-list" class="note-list"></div>
@@ -262,6 +267,7 @@
           </button>
         </div>
         <div class="form-hint" id="dataset-budget">Uses the current structure recipe, target schema and filtration mode (auto or manual epsilon).</div>
+        <div id="dataset-plausibility" class="plausibility"></div>
         <div class="form-hint">Saved under <code>datasets/ds-NNNN/</code>.</div>
       </article>
 

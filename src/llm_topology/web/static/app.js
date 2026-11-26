@@ -351,28 +351,41 @@ function setLoading(loading) {
   $(".btn-label").textContent = loading ? "Computing filtration…" : "Generate point cloud";
 }
 
+function buildBatchPayload() {
+  const spec = buildSpec();
+  const count = clampInt($("#batch-count").value, 1, 24, 6);
+  const mode = $("#batch-mode").value;
+  let structures = null;
+  if (mode === "mix") {
+    structures = selectedBatchStructures();
+    const available = new Set(
+      state.catalog.structures
+        .filter((structure) => structure.needs_ambient <= spec.ambient_dim)
+        .map((structure) => structure.value)
+    );
+    structures = structures.filter((value) => available.has(value));
+    if (!structures.length) {
+      throw new Error("Select at least one structure compatible with the ambient dimension.");
+    }
+  }
+  return {
+    spec,
+    count,
+    mode,
+    structures,
+    vary_transform: $("#vary-transform").checked,
+    variation_strength: Math.max(0, Math.min(1, numberValue("variation_strength", 0.35))),
+  };
+}
+
 async function generate({ live = false } = {}) {
   hideError();
   setLoading(true);
   setStatus(live ? "updating preview" : "generating");
   const token = ++state.generateToken;
   try {
-    const spec = buildSpec();
-    const count = clampInt($("#batch-count").value, 1, 24, 6);
-    const mode = $("#batch-mode").value;
-    let structures = null;
-    if (mode === "mix") {
-      structures = selectedBatchStructures();
-      const available = new Set(
-        state.catalog.structures
-          .filter((structure) => structure.needs_ambient <= spec.ambient_dim)
-          .map((structure) => structure.value)
-      );
-      structures = structures.filter((value) => available.has(value));
-      if (!structures.length) {
-        throw new Error("Select at least one structure compatible with the ambient dimension.");
-      }
-    }
+    const payload = buildBatchPayload();
+    const { mode, structures } = payload;
     const previousSelected = state.selected;
     state.abortController?.abort();
     const controller = new AbortController();
@@ -380,14 +393,7 @@ async function generate({ live = false } = {}) {
     const data = await fetchJSON("/api/generate/batch", {
       method: "POST",
       signal: controller.signal,
-      body: JSON.stringify({
-        spec,
-        count,
-        mode,
-        structures,
-        vary_transform: $("#vary-transform").checked,
-        variation_strength: Math.max(0, Math.min(1, numberValue("variation_strength", 0.35))),
-      }),
+      body: JSON.stringify(payload),
     });
     if (token !== state.generateToken) return;
     state.batch = data.items;
@@ -404,7 +410,10 @@ async function generate({ live = false } = {}) {
     showError(error.message || String(error));
     toast(error.message || "Generation failed", true);
   } finally {
-    if (token === state.generateToken) setLoading(false);
+    if (token === state.generateToken) {
+      setLoading(false);
+      updateDataPlausibility();
+    }
   }
 }
 
@@ -997,6 +1006,45 @@ async function buildTrainingDataset() {
   }
 }
 
+function renderPlausibility(container, result) {
+  if (!container) return;
+  container.innerHTML = "";
+  if (!result) return;
+  if (!result.warnings?.length) return;
+  for (const warning of result.warnings) {
+    const item = document.createElement("div");
+    item.className = `plaus-item ${result.level === "block" ? "block" : result.level === "warn" ? "warn" : ""}`;
+    item.textContent = warning;
+    container.appendChild(item);
+  }
+}
+
+let plausibilityTimer = null;
+async function updateDataPlausibility() {
+  window.clearTimeout(plausibilityTimer);
+  plausibilityTimer = window.setTimeout(async () => {
+    const container = $("#data-plausibility");
+    const button = $("#generate-btn");
+    try {
+      const payload = buildBatchPayload();
+      const result = await fetchJSON("/api/estimate/generate", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      renderPlausibility(container, result);
+      if (result.level === "block") {
+        button.disabled = true;
+        button.title = result.warnings.join(" ");
+      } else if (!button.classList.contains("loading")) {
+        button.disabled = false;
+        button.title = "";
+      }
+    } catch (error) {
+      renderPlausibility(container, { level: "warn", warnings: [error.message] });
+    }
+  }, 450);
+}
+
 let liveTimer = null;
 function scheduleLiveGenerate() {
   if (!$("#live-preview")?.checked) return;
@@ -1031,6 +1079,7 @@ async function boot() {
   syncMethodVisibility();
   syncEpsilonVisibility();
   updateDatasetBudget();
+  updateDataPlausibility();
   $("#structure-select").addEventListener("change", syncStructureVisibility);
   $("#ambient-dim").addEventListener("input", syncBatchStructureAvailability);
   $("#ambient-dim").addEventListener("change", syncBatchStructureAvailability);
@@ -1038,6 +1087,7 @@ async function boot() {
     syncBatchMode();
     persistDataState();
     scheduleLiveGenerate();
+    updateDataPlausibility();
   });
   $("#method-select").addEventListener("change", syncMethodVisibility);
   $("#auto-epsilon").addEventListener("change", syncEpsilonVisibility);
@@ -1066,6 +1116,7 @@ async function boot() {
   const onControlChange = () => {
     persistDataState();
     scheduleLiveGenerate();
+    updateDataPlausibility();
   };
   form.addEventListener("input", onControlChange);
   form.addEventListener("change", onControlChange);
@@ -1084,6 +1135,10 @@ async function boot() {
   $("#copies").addEventListener("change", updateDatasetBudget);
   $("#batch-structure-checks").addEventListener("change", onControlChange);
   $("#build-dataset").addEventListener("click", buildTrainingDataset);
+  $("#top-generate").addEventListener("click", () => generate());
+  $("#top-build-dataset").addEventListener("click", () => {
+    document.querySelector("#dataset-builder")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
   if (saved.lastBatch && Array.isArray(saved.lastBatch) && saved.lastBatch.length) {
     state.batch = saved.lastBatch;
     state.selected = Number(saved.selected) || 0;

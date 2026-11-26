@@ -193,12 +193,11 @@ function schemaForMaxDim(maxDim) {
   };
 }
 
-function buildSpec() {
+function buildSpec({ requireDataset = true } = {}) {
   const datasetId = $("#dataset-select").value || labState.datasetId;
-  if (!datasetId) throw new Error("Select a saved dataset first.");
+  if (requireDataset && !datasetId) throw new Error("Select a saved dataset first.");
   const context = intValue("context-train", 64, 32768, 1024);
-  return {
-    dataset_id: datasetId,
+  const spec = {
     model: {
       max_seq_len: context,
       n_layers: intValue("n-layers", 1, 24, 3),
@@ -238,6 +237,8 @@ function buildSpec() {
       eval_every_batches: 20,
     },
   };
+  if (datasetId) spec.dataset_id = datasetId;
+  return spec;
 }
 
 async function startTraining() {
@@ -260,6 +261,7 @@ async function startTraining() {
     persistLabState();
     renderJob(job);
     schedulePoll(250);
+    updateTrainPlausibility();
     toast(`Run ${job.id} started`);
   } catch (error) {
     setError(error.message);
@@ -1241,6 +1243,45 @@ async function previewDataset() {
   }
 }
 
+function renderTrainPlausibility(result) {
+  const container = $("#train-plausibility");
+  if (!container) return;
+  container.innerHTML = "";
+  if (!result || !result.warnings?.length) return;
+  for (const warning of result.warnings) {
+    const item = document.createElement("div");
+    item.className = `plaus-item ${result.level === "block" ? "block" : result.level === "warn" ? "warn" : ""}`;
+    item.textContent = warning;
+    container.appendChild(item);
+  }
+}
+
+let trainPlausibilityTimer = null;
+function updateTrainPlausibility() {
+  window.clearTimeout(trainPlausibilityTimer);
+  trainPlausibilityTimer = window.setTimeout(async () => {
+    const button = $("#train-toggle");
+    if (!button) return;
+    try {
+      const spec = buildSpec({ requireDataset: false });
+      const result = await fetchJSON("/api/estimate/training", {
+        method: "POST",
+        body: JSON.stringify(spec),
+      });
+      renderTrainPlausibility(result);
+      if (result.level === "block" && !labState.running) {
+        button.disabled = true;
+        button.title = result.warnings.join(" ");
+      } else if (!labState.running && !labState.stopping) {
+        button.disabled = false;
+        button.title = "";
+      }
+    } catch (error) {
+      renderTrainPlausibility({ level: "warn", warnings: [error.message] });
+    }
+  }, 450);
+}
+
 function setTab(tab) {
   labState.view = tab;
   saveUIState({ labTab: tab });
@@ -1259,6 +1300,7 @@ function bindEvents() {
     labState.datasetId = $("#dataset-select").value || null;
     updateDatasetMeta();
     previewDataset();
+    updateTrainPlausibility();
   });
   $("#preview-dataset").addEventListener("click", previewDataset);
   $("#go-data-studio").addEventListener("click", () => {
@@ -1267,12 +1309,20 @@ function bindEvents() {
   });
   window.addEventListener("llm-datasets-changed", () => loadDatasets(labState.datasetId));
   $("#run-analysis").addEventListener("click", runAnalysis);
+  $("#top-run-analysis").addEventListener("click", () => $("#run-analysis").click());
+  $("#top-run-predictions").addEventListener("click", () => $("#run-predictions").click());
   $("#analysis-job").addEventListener("change", () => {
     labState.jobId = $("#analysis-job").value || labState.jobId;
     persistLabState();
   });
-  $(".lab-sidebar").addEventListener("input", persistLabState);
-  $(".lab-sidebar").addEventListener("change", persistLabState);
+  $(".lab-sidebar").addEventListener("input", () => {
+    persistLabState();
+    updateTrainPlausibility();
+  });
+  $(".lab-sidebar").addEventListener("change", () => {
+    persistLabState();
+    updateTrainPlausibility();
+  });
   $(".fresh-controls").addEventListener("input", persistLabState);
   $(".fresh-controls").addEventListener("change", persistLabState);
   $("#run-predictions").addEventListener("click", runFreshPredictions);
@@ -1321,6 +1371,7 @@ async function boot() {
     $("#fresh-epsilon").disabled = $("#fresh-filtration-mode").value !== "manual";
     await loadDatasets(saved.datasetId);
     await refreshRuns();
+    updateTrainPlausibility();
     if (saved.jobId) {
       labState.jobId = saved.jobId;
       pollStatus();

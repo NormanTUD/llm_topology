@@ -151,6 +151,25 @@ def test_dataset_api_roundtrip(monkeypatch, tmp_path) -> None:
     assert len(preview.json()["items"]) <= 2
 
 
+def test_estimate_endpoints_and_training_guard() -> None:
+    huge = {
+        "model": {
+            "max_seq_len": 32768,
+            "n_layers": 24,
+            "n_heads": 16,
+            "d_model": 1024,
+            "d_ff": 4096,
+        },
+        "training": {"batch_size": 64, "epochs": 1, "device": "cpu"},
+    }
+    estimate = client.post("/api/estimate/training", json=huge)
+    assert estimate.status_code == 200
+    assert estimate.json()["level"] == "block"
+    start = client.post("/api/train/start", json=huge)
+    assert start.status_code == 422
+    assert client.post("/api/estimate/generate", json={"count": 1}).status_code == 200
+
+
 def test_training_routes_report_errors() -> None:
     assert client.get("/api/train/status/not-a-job").status_code == 404
     assert client.post("/api/analyze/not-a-job").status_code == 422

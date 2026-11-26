@@ -106,6 +106,8 @@ Data Foundation:
 - einstellbare String-Präzision mit Default 5 Nachkommastellen,
 - automatische Kontextvergrößerung im Dataset Builder, wenn das Token-Budget
   nicht passt,
+- serverseitige RAM-/VRAM-Plausibilitätschecks für Generierung, Dataset-Build
+  und Training inklusive Warnungen und Blockieren bei kritischen Settings,
 - Temml-Gleichungsansicht,
 - pytest-Suite und GitHub-Actions-CI.
 
@@ -119,7 +121,10 @@ Model Lab:
 - AdamW/Adam/SGD, LR-Scheduler, Warmup, Early Stopping, Checkpoints,
 - CPU/CUDA/MPS-Erkennung, CPU-Default,
 - Live-Training im Browser mit Polling, Batch-Loss-Kurven, Validierungspaaren
-  (Inputwolke, wahre vs. vorhergesagte Betti-Zahlen) und Samples,
+  (Original- vs. augmentierte Inputwolke, wahre vs. vorhergesagte Betti-Zahlen)
+  und Samples,
+- prominente Start/Stop-Action-Bar im Trainingsbereich,
+- Dataset-Preview als Hauptpanel unter dem Trainingsloss,
 - Start/Stop als ein umschaltender Button,
 - Auswahl gespeicherter Datasets statt doppelter Dataset-Regler,
 - getrennte Train-/Val-Transformationen im Dataset Builder,
@@ -147,7 +152,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **97 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **102 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -447,6 +452,7 @@ serverseitig gespeichert und nach F5 wiederhergestellt.
    - Topology Guard: theoretische vs. berechnete Betti-Zahlen,
    - Trainingsdatensatz-Erzeugung mit getrennten Train-/Val-/Test-Splits,
    - Filtration und Zielgruppen mit Auto- oder manuellem Epsilon,
+- Top-Action-Bar mit Generieren und Dataset-Builder-Sprung,
    - 3D-Punktwolke, Persistenzdiagramm mit Referenz-Betti, Betti-Kurven,
    - theoretische vs. berechnete Betti-Zahlen,
    - Zielstring, Modell-Input und Tokenstrom,
