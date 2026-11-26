@@ -101,6 +101,8 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Mehrere Tori/Kopien mit stabilen b0-Labels
 - [x] Auto- und manuelles Epsilon in Dataset-Erzeugung
 - [x] Filtration wird als Zielgruppe mitgelernt und in Predictions angezeigt
+- [x] GUI-Smoke-Tests: 31 Checks fuer Tabs, Galerie, Dataset-Builder, Training, Analyse, F5
+- [x] GUI-Test fuer Stop-Button und Token-Budget-Guard
 
 ## Phase 2 - Interpretierbarkeit
 
@@ -132,6 +134,15 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [ ] Python-Ausdruck/Snippet
 - [ ] Interaktiver Equation Explorer
 - [ ] Visueller Feinschliff
+
+## Entschieden fuer die naechste Ausbaustufe
+
+- [x] Val-Transformationen: drei Modi `clean`, `same`, `heldout`
+- [x] Punkte: sowohl Gesamtpunkte als auch Punkte pro Komponente anbieten
+- [x] Filtration: Epsilon als Input plus Auto-Modus
+- [x] Generierte Punktwolken: echtes 3D nebeneinander (Input vs. generiert)
+- [x] Dataset-Bibliothek: duplizieren, loeschen, exportieren, importieren
+- [x] Naechster grosser Fokus: Phase 3 (OOD/Invarianz, Ablation, Patching)
 
 ## Offene Phase-3-Entscheidungen
 
