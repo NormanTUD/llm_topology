@@ -76,6 +76,18 @@ function plotlyReady() {
   return typeof window.Plotly !== "undefined";
 }
 
+let webglCache = null;
+function hasWebGL() {
+  if (webglCache !== null) return webglCache;
+  try {
+    const canvas = document.createElement("canvas");
+    webglCache = Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
+  } catch (_error) {
+    webglCache = false;
+  }
+  return webglCache;
+}
+
 function plotlyLayout(extra = {}) {
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
@@ -557,7 +569,7 @@ function renderPredictionPairs(job) {
 function plotMiniPoints(element, points) {
   if (!plotlyReady() || !points || !points.length) return;
   const trace = {
-    type: "scattergl",
+    type: hasWebGL() ? "scattergl" : "scatter",
     mode: "markers",
     x: points.map((point) => point[0]),
     y: points.map((point) => point[1]),
@@ -851,7 +863,7 @@ function renderLatent(analysis) {
   const coords = projection.coordinates[layer] || [];
   const names = projection.structure_names;
   const structureIds = projection.structure_ids;
-  const dims = coords[0]?.length || 2;
+  const dims = hasWebGL() ? coords[0]?.length || 2 : 2;
   if (!coords.length) {
     $("#latent-plot").innerHTML = '<div class="plot-placeholder">No projection available.</div>';
     return;

@@ -6,11 +6,13 @@ import argparse
 import asyncio
 import json
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
 import websockets
@@ -81,6 +83,9 @@ def seed(base_url: str) -> str:
 
 
 def launch_chromium(base_url: str, profile: Path) -> subprocess.Popen:
+    parsed = urlparse(base_url)
+    host = socket.gethostbyname(parsed.hostname or "app")
+    chrome_url = f"http://{host}:{parsed.port or 80}"
     command = [
         "chromium",
         "--headless=new",
@@ -93,7 +98,7 @@ def launch_chromium(base_url: str, profile: Path) -> subprocess.Popen:
         "--remote-debugging-port=9222",
         f"--user-data-dir={profile}",
         "--window-size=1440,1100",
-        base_url,
+        chrome_url,
     ]
     return subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

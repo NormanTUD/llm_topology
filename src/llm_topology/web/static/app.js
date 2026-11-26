@@ -91,6 +91,18 @@ function plotlyReady() {
   return typeof window.Plotly !== "undefined";
 }
 
+let webglCache = null;
+function hasWebGL() {
+  if (webglCache !== null) return webglCache;
+  try {
+    const canvas = document.createElement("canvas");
+    webglCache = Boolean(canvas.getContext("webgl") || canvas.getContext("experimental-webgl"));
+  } catch (_error) {
+    webglCache = false;
+  }
+  return webglCache;
+}
+
 function plotlyLayout(extra = {}) {
   return {
     paper_bgcolor: "rgba(0,0,0,0)",
@@ -491,7 +503,7 @@ function plotMiniCloud(element, item) {
   if (!plotlyReady()) return;
   const points = item.projection;
   const trace = {
-    type: "scattergl",
+    type: hasWebGL() ? "scattergl" : "scatter",
     mode: "markers",
     x: points.map((point) => point[0]),
     y: points.map((point) => point[1]),
@@ -559,12 +571,13 @@ function renderCloud(data) {
   element.innerHTML = "";
   const projected = data.projection;
   const colors = projected.map((_, index) => index);
+  const use3d = hasWebGL();
   const traces = [{
-    type: "scatter3d",
+    type: use3d ? "scatter3d" : "scatter",
     mode: "markers",
     x: projected.map((point) => point[0]),
     y: projected.map((point) => point[1]),
-    z: projected.map((point) => point[2]),
+    ...(use3d ? { z: projected.map((point) => point[2]) } : {}),
     marker: {
       size: data.sample.n_points > 900 ? 2.1 : 3.2,
       color: colors,
@@ -582,29 +595,37 @@ function renderCloud(data) {
   const reference = data.reference_projection || [];
   if (reference.length) {
     traces.push({
-      type: "scatter3d",
+      type: use3d ? "scatter3d" : "scatter",
       mode: "markers",
       name: "canonical reference",
       x: reference.map((point) => point[0]),
       y: reference.map((point) => point[1]),
-      z: reference.map((point) => point[2]),
+      ...(use3d ? { z: reference.map((point) => point[2]) } : {}),
       marker: { size: 2, color: "rgba(180,195,220,.55)", symbol: "circle-open", opacity: 0.7 },
       hovertemplate: "reference<extra></extra>",
     });
   }
-  const layout = plotlyLayout({
-    margin: { l: 0, r: 0, t: 0, b: 0 },
-    showlegend: true,
-    legend: { orientation: "h", y: 1.02, x: 0, font: { size: 9 } },
-    scene: {
-      bgcolor: "rgba(0,0,0,0)",
-      xaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
-      yaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
-      zaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
-      camera: { eye: { x: 1.35, y: 1.15, z: 1.05 } },
-      aspectmode: "data",
-    },
-  });
+  const layout = use3d
+    ? plotlyLayout({
+        margin: { l: 0, r: 0, t: 0, b: 0 },
+        showlegend: true,
+        legend: { orientation: "h", y: 1.02, x: 0, font: { size: 9 } },
+        scene: {
+          bgcolor: "rgba(0,0,0,0)",
+          xaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
+          yaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
+          zaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
+          camera: { eye: { x: 1.35, y: 1.15, z: 1.05 } },
+          aspectmode: "data",
+        },
+      })
+    : plotlyLayout({
+        margin: { l: 40, r: 16, t: 16, b: 36 },
+        showlegend: true,
+        legend: { orientation: "h", y: 1.02, x: 0, font: { size: 9 } },
+        xaxis: { title: "x", gridcolor: "rgba(148,163,184,.08)" },
+        yaxis: { title: "y", gridcolor: "rgba(148,163,184,.08)" },
+      });
   window.Plotly.newPlot(element, traces, layout, plotConfig());
   const referenceChip = $("#reference-chip");
   if (referenceChip) {
@@ -632,7 +653,7 @@ function renderPersistence(data) {
     const infinite = diagram.filter((pair) => pair[1] === null);
     if (finite.length) {
       traces.push({
-        type: "scattergl",
+        type: hasWebGL() ? "scattergl" : "scatter",
         mode: "markers",
         name: DIM_NAMES[dimension] || `H${dimension}`,
         x: finite.map((pair) => pair[0]),
@@ -643,7 +664,7 @@ function renderPersistence(data) {
     }
     if (infinite.length) {
       traces.push({
-        type: "scattergl",
+        type: hasWebGL() ? "scattergl" : "scatter",
         mode: "markers",
         name: `${DIM_NAMES[dimension] || `H${dimension}`} infinite`,
         x: infinite.map((pair) => pair[0]),
