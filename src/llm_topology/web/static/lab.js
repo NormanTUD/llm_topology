@@ -1282,6 +1282,174 @@ function updateTrainPlausibility() {
   }, 450);
 }
 
+function setInput(id, value) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  if (element.type === "checkbox") element.checked = Boolean(value);
+  else element.value = String(value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function exportConfig() {
+  try {
+    const spec = buildSpec();
+    const dataset = labState.datasets.find((item) => item.id === labState.datasetId);
+    const result = await fetchJSON("/api/config/export", {
+      method: "POST",
+      body: JSON.stringify({
+        name: dataset?.name || "experiment",
+        spec,
+        run_analysis: true,
+      }),
+    });
+    const blob = new Blob([result.yaml], { type: "text/yaml" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${(dataset?.name || "experiment").replace(/[^a-zA-Z0-9_-]+/g, "-")}.yaml`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast("Config exported");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function importConfig(file) {
+  try {
+    const text = await file.text();
+    let response;
+    if (file.name.endsWith(".json")) {
+      const parsed = JSON.parse(text);
+      response = await fetchJSON("/api/config/import", {
+        method: "POST",
+        body: JSON.stringify({ yaml: JSON.stringify(parsed) }),
+      });
+    } else {
+      response = await fetchJSON("/api/config/import", {
+        method: "POST",
+        body: JSON.stringify({ yaml: text }),
+      });
+    }
+    const config = response.config;
+    const model = config.model;
+    const training = config.training;
+    for (const [id, value] of Object.entries({
+      "n-layers": model.n_layers,
+      "n-heads": model.n_heads,
+      "d-model": model.d_model,
+      "d-ff": model.d_ff,
+      "dropout": model.dropout,
+      "context-train": model.max_seq_len,
+      "activation": model.activation,
+      "norm-placement": model.norm_placement,
+      "position-encoding": model.position_encoding,
+      "tie-embeddings": model.tie_embeddings,
+      "use-bias": model.use_bias,
+      "init-scheme": model.init.scheme,
+      "init-std": model.init.std,
+      "init-seed": model.init.seed,
+      "epochs": training.epochs,
+      "batch-size": training.batch_size,
+      "lr": training.lr,
+      "weight-decay": training.weight_decay,
+      "optimizer": training.optimizer,
+      "warmup": training.warmup_steps,
+      "grad-clip": training.grad_clip,
+      "patience": training.patience,
+      "train-seed": training.seed,
+      "aux-weight": training.aux_weight,
+      "ranking-weight": training.ranking_weight,
+      "mc-negatives": training.mc_negatives,
+      "max-new-tokens": training.max_new_tokens,
+      "device": training.device,
+    })) {
+      setInput(id, value);
+    }
+    if (config.dataset_id) {
+      await loadDatasets(config.dataset_id);
+    } else {
+      toast("Config uses a data recipe; build/save it in Data Studio first.", true);
+    }
+    persistLabState();
+    updateTrainPlausibility();
+    toast("Config imported");
+  } catch (error) {
+    setError(error.message);
+    toast(error.message, true);
+  }
+}
+
+async function exportRun() {
+  if (!labState.jobId) {
+    toast("Select a run first", true);
+    return;
+  }
+  try {
+    const response = await fetch(`/api/runs/${labState.jobId}/export`);
+    if (!response.ok) throw new Error(`Export failed: HTTP ${response.status}`);
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${labState.jobId}.zip`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast("Run exported");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function importRun(file) {
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch("/api/runs/import", { method: "POST", body: form });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || `Import failed: HTTP ${response.status}`);
+    await refreshRuns();
+    toast(`Imported ${body.imported}`);
+  } catch (error) {
+    setError(error.message);
+    toast(error.message, true);
+  }
+}
+
+async function exportDataset() {
+  if (!labState.datasetId) {
+    toast("Select a dataset first", true);
+    return;
+  }
+  try {
+    const response = await fetch(`/api/datasets/${labState.datasetId}/export`);
+    if (!response.ok) throw new Error(`Export failed: HTTP ${response.status}`);
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${labState.datasetId}.zip`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    toast("Dataset exported");
+  } catch (error) {
+    toast(error.message, true);
+  }
+}
+
+async function importDataset(file) {
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch("/api/datasets/import", { method: "POST", body: form });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.detail || `Import failed: HTTP ${response.status}`);
+    await loadDatasets(body.imported);
+    toast(`Imported ${body.imported}`);
+  } catch (error) {
+    setError(error.message);
+    toast(error.message, true);
+  }
+}
+
 function setTab(tab) {
   labState.view = tab;
   saveUIState({ labTab: tab });
@@ -1296,6 +1464,12 @@ function bindEvents() {
   $("#train-toggle").addEventListener("click", toggleTraining);
   $("#refresh-runs").addEventListener("click", refreshRuns);
   $("#refresh-datasets").addEventListener("click", () => loadDatasets(labState.datasetId));
+  $("#export-dataset").addEventListener("click", exportDataset);
+  $("#import-dataset").addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) importDataset(file);
+    event.target.value = "";
+  });
   $("#dataset-select").addEventListener("change", () => {
     labState.datasetId = $("#dataset-select").value || null;
     updateDatasetMeta();
@@ -1309,6 +1483,18 @@ function bindEvents() {
   });
   window.addEventListener("llm-datasets-changed", () => loadDatasets(labState.datasetId));
   $("#run-analysis").addEventListener("click", runAnalysis);
+  $("#export-config").addEventListener("click", exportConfig);
+  $("#import-config").addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) importConfig(file);
+    event.target.value = "";
+  });
+  $("#export-run").addEventListener("click", exportRun);
+  $("#import-run").addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) importRun(file);
+    event.target.value = "";
+  });
   $("#top-run-analysis").addEventListener("click", () => $("#run-analysis").click());
   $("#top-run-predictions").addEventListener("click", () => $("#run-predictions").click());
   $("#analysis-job").addEventListener("change", () => {

@@ -23,6 +23,8 @@
           <div class="dataset-actions">
             <button type="button" class="ghost small" id="refresh-datasets">refresh</button>
             <button type="button" class="ghost small" id="go-data-studio">build in Data Studio</button>
+            <button type="button" class="ghost small" id="export-dataset">export</button>
+            <label class="ghost small file-button">import<input type="file" id="import-dataset" accept=".zip" hidden></label>
           </div>
           <div class="dataset-meta" id="dataset-meta">No dataset selected. Build one in Data Studio first.</div>
         </details>
@@ -98,6 +100,8 @@
             <span class="btn-spinner" aria-hidden="true"></span>
             <span class="btn-label">Start training</span>
           </button>
+          <button type="button" class="ghost" id="export-config">Export config</button>
+          <label class="ghost file-button">Import config<input type="file" id="import-config" accept=".yaml,.yml,.json" hidden></label>
           <div id="train-plausibility" class="plausibility"></div>
         </div>
         <div class="metrics-grid lab-metrics">
@@ -151,7 +155,7 @@
         </article>
 
         <article class="panel runs-panel">
-          <div class="panel-heading compact"><div><span class="eyebrow">HISTORY</span><h2>Runs</h2></div><button type="button" class="ghost small" id="refresh-runs">refresh</button></div>
+          <div class="panel-heading compact"><div><span class="eyebrow">HISTORY</span><h2>Runs</h2></div><div class="dataset-actions"><button type="button" class="ghost small" id="refresh-runs">refresh</button><button type="button" class="ghost small" id="export-run">export current</button><label class="ghost small file-button">import run<input type="file" id="import-run" accept=".zip" hidden></label></div></div>
           <div id="run-list" class="run-list"><span class="muted">No runs yet.</span></div>
         </article>
       </div>

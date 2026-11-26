@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""Bootstrap and start the LLM Topology Lab.
+"""Bootstrap, check, and run the LLM Topology Lab.
 
-Run `python3 app.py` (or `uv run app.py`) and uv will provision the local
-environment on the first start. The process re-executes itself once inside
-the uv environment; the environment flag prevents recursion.
+System assumptions: python3 and uv. Everything else is provisioned by uv.
 """
 
 from __future__ import annotations
@@ -11,7 +9,6 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
-import subprocess
 import sys
 import threading
 import time
@@ -27,33 +24,25 @@ def _find_uv() -> str | None:
     if found:
         return found
     local = Path.home() / ".local" / "bin" / "uv"
-    if local.exists():
-        return str(local)
-    return None
+    return str(local) if local.exists() else None
 
 
-def _ensure_uv() -> str:
-    uv = _find_uv()
-    if uv:
-        return uv
-    print("uv was not found. Trying to install it with pip --user ...", flush=True)
-    result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "--user", "uv"],
-        check=False,
-        capture_output=False,
-    )
-    uv = _find_uv()
-    if result.returncode == 0 and uv:
-        return uv
+def _uv_missing() -> None:
     raise SystemExit(
-        "uv is required but could not be installed.\n"
-        "Install it manually, then rerun: python3 app.py\n"
-        "  https://docs.astral.sh/uv/getting-started/installation/"
+        "uv ist nicht installiert. uv wird zum Provisionieren der Umgebung benoetigt.\n\n"
+        "Installiere uv mit einem der folgenden Befehle:\n"
+        "  curl -LsSf https://astral.sh/uv/install.sh | sh\n"
+        "  python3 -m pip install --user uv\n"
+        "  brew install uv\n\n"
+        "Danach erneut starten:\n"
+        "  python3 app.py\n"
     )
 
 
 def _reexec_inside_uv() -> None:
-    uv = _ensure_uv()
+    uv = _find_uv()
+    if not uv:
+        _uv_missing()
     env = os.environ.copy()
     env[BOOTSTRAP_FLAG] = "1"
     command = [
@@ -69,10 +58,27 @@ def _reexec_inside_uv() -> None:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the LLM Topology Lab locally.")
-    parser.add_argument("--host", default="127.0.0.1", help="Bind address (default: 127.0.0.1)")
-    parser.add_argument("--port", type=int, default=8000, help="Port (default: 8000)")
+    parser = argparse.ArgumentParser(
+        description="LLM Topology Lab: GUI, headless training, or doctor.",
+        epilog=(
+            "Beispiele:\n"
+            "  python3 app.py --doctor\n"
+            "  python3 app.py\n"
+            "  python3 app.py --config experiment.yaml --headless\n"
+            "  python3 app.py --config experiment.yaml --headless --output runs/hpc\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Web bind address (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8000, help="Web port (default: 8000)")
     parser.add_argument("--no-browser", action="store_true", help="Do not open a browser tab")
+    parser.add_argument("--doctor", action="store_true", help="Run startup checks and exit")
+    parser.add_argument("--config", help="YAML experiment config for headless/HPC mode")
+    parser.add_argument(
+        "--headless", action="store_true", help="Run without GUI (requires --config)"
+    )
+    parser.add_argument("--output", help="Override output directory for headless mode")
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda", "mps"], help="Override device")
     return parser.parse_args()
 
 
@@ -85,19 +91,19 @@ def _open_browser_later(host: str, port: int) -> None:
     threading.Thread(target=open_it, daemon=True).start()
 
 
-def _run_server() -> None:
+def _run_server(args: argparse.Namespace) -> None:
     try:
         import uvicorn
 
         from llm_topology.web.main import app
-    except ImportError as exc:  # pragma: no cover - only hit with a broken environment
+    except ImportError as exc:  # pragma: no cover
         raise SystemExit(
-            "The environment is missing a dependency. Try:\n"
+            "Eine Python-Abhaengigkeit fehlt. Fuehre aus:\n"
             f"  uv sync --project {ROOT}\n"
-            f"  python3 {Path(__file__).name}"
+            f"  python3 {Path(__file__).name}\n"
+            f"Originalfehler: {exc}"
         ) from exc
 
-    args = _parse_args()
     url = f"http://{args.host}:{args.port}"
     print("", flush=True)
     print("  LLM Topology Lab", flush=True)
@@ -113,7 +119,47 @@ def main() -> None:
     if os.environ.get(BOOTSTRAP_FLAG) != "1":
         _reexec_inside_uv()
         return
-    _run_server()
+
+    args = _parse_args()
+    if args.headless and not args.config:
+        raise SystemExit(
+            "--headless braucht --config. Beispiel: python3 app.py --config experiment.yaml --headless"
+        )
+
+    from llm_topology.preflight import PreflightError, collect_checks, ensure_ready, render_checks
+
+    mode = "doctor" if args.doctor else "cli" if args.config else "server"
+    checks = collect_checks(mode=mode, config_path=args.config, host=args.host, port=args.port)
+    render_checks(checks, title="LLM Topology Lab · preflight")
+    if args.doctor:
+        raise SystemExit(1 if any(check.status == "error" for check in checks) else 0)
+    try:
+        ensure_ready(checks)
+    except PreflightError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    if args.config:
+        from llm_topology.cli import run_experiment
+
+        try:
+            run_experiment(
+                args.config,
+                output_override=args.output,
+                device_override=args.device,
+            )
+        except KeyboardInterrupt:
+            raise SystemExit(130) from None
+        except SystemExit:
+            raise
+        except Exception as exc:
+            raise SystemExit(
+                f"Headless-Lauf fehlgeschlagen: {type(exc).__name__}: {exc}\n"
+                "Pruefe die Config, den Dataset-Import und den Output-Pfad. "
+                "Mit `python3 app.py --doctor` siehst du die Systemchecks."
+            ) from exc
+        return
+
+    _run_server(args)
 
 
 if __name__ == "__main__":

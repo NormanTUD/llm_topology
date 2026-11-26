@@ -1666,3 +1666,16 @@ input[type="range"] {
 .dataset-main-panel {
   padding: 18px;
 }
+
+.file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.action-bar .ghost.file-button {
+  width: auto;
+  min-width: 130px;
+  margin-top: 0;
+}

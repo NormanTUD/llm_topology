@@ -248,6 +248,9 @@ class JobManager:
             raise JobError(f"unknown job: {job_id}")
         return job
 
+    def reload(self) -> None:
+        self._load_disk_runs()
+
     def list(self) -> list[dict[str, Any]]:
         with self._lock:
             jobs = list(self._jobs.values())

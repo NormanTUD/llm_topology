@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import shutil
+import tempfile
+import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, ConfigDict, Field
@@ -25,6 +28,7 @@ from ..config import (
 )
 from ..datasets import STORE as DATASET_STORE
 from ..datasets import DatasetStoreError
+from ..experiment import ExperimentConfig, config_from_training_spec
 from ..limits import estimate_dataset, estimate_generation, estimate_training
 from ..model.config import AnalysisSpec, DataBuildSpec, ModelSpec, TrainConfig, TrainingSpec
 from ..pipeline import PipelineError, generate_dataset
@@ -100,6 +104,17 @@ class CatalogResponse(BaseModel):
 class DatasetCreateRequest(BaseModel):
     name: str = Field(default="dataset", min_length=1, max_length=80)
     data_spec: DataBuildSpec
+
+
+class ConfigExportRequest(BaseModel):
+    name: str = "experiment"
+    spec: TrainingSpec
+    notes: str = ""
+    run_analysis: bool = True
+
+
+class ConfigImportRequest(BaseModel):
+    yaml: str
 
 
 class BatchGenerateRequest(BaseModel):
@@ -290,6 +305,26 @@ async def parse_targets(payload: ParseTargetRequest) -> ParseTargetResponse:
     )
 
 
+@app.post("/api/config/export")
+async def export_config(payload: ConfigExportRequest) -> dict[str, object]:
+    config = config_from_training_spec(
+        payload.spec,
+        name=payload.name,
+        notes=payload.notes,
+        run_analysis=payload.run_analysis,
+    )
+    return {"yaml": config.to_yaml(), "json": config.model_dump(mode="json")}
+
+
+@app.post("/api/config/import")
+async def import_config(payload: ConfigImportRequest) -> dict[str, object]:
+    try:
+        config = ExperimentConfig.from_yaml(payload.yaml)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Config ungueltig: {exc}") from exc
+    return {"config": config.model_dump(mode="json")}
+
+
 @app.post("/api/estimate/generate")
 async def estimate_generate(payload: BatchGenerateRequest) -> dict[str, object]:
     return estimate_generation(payload.spec, count=payload.count)
@@ -327,6 +362,52 @@ async def create_dataset(payload: DatasetCreateRequest) -> dict[str, object]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.get("/api/datasets/{dataset_id}/export")
+async def export_dataset(dataset_id: str) -> FileResponse:
+    try:
+        DATASET_STORE.get_meta(dataset_id)
+    except DatasetStoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    directory = DATASET_STORE.root / dataset_id
+    tmp = Path(tempfile.mkdtemp(prefix="topology-dataset-"))
+    archive = tmp / f"{dataset_id}.zip"
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        for path in directory.rglob("*"):
+            if path.is_file():
+                bundle.write(path, path.relative_to(DATASET_STORE.root))
+    return FileResponse(archive, filename=f"{dataset_id}.zip", media_type="application/zip")
+
+
+@app.post("/api/datasets/import")
+async def import_dataset(file: Annotated[UploadFile, File()]) -> dict[str, object]:
+    tmp = Path(tempfile.mkdtemp(prefix="topology-dataset-import-"))
+    archive = tmp / "upload.zip"
+    with archive.open("wb") as handle:
+        shutil.copyfileobj(file.file, handle)
+    try:
+        with zipfile.ZipFile(archive) as bundle:
+            for member in bundle.infolist():
+                target = (tmp / member.filename).resolve()
+                if not target.is_relative_to(tmp.resolve()):
+                    raise HTTPException(status_code=422, detail="ZIP enthaelt unsichere Pfade.")
+            bundle.extractall(tmp)
+        metas = list(tmp.rglob("meta.json"))
+        if not metas:
+            raise HTTPException(status_code=422, detail="ZIP enthaelt keine meta.json.")
+        source = metas[0].parent
+        dataset_id = source.name
+        target = DATASET_STORE.root / dataset_id
+        if target.exists():
+            raise HTTPException(status_code=409, detail=f"Dataset {dataset_id} existiert bereits.")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, target)
+        return {"imported": dataset_id, "path": str(target)}
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=422, detail="Datei ist kein gueltiges ZIP.") from exc
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 @app.get("/api/datasets/{dataset_id}/preview")
@@ -413,6 +494,54 @@ async def predict_job(job_id: str, payload: BatchGenerateRequest) -> dict[str, o
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - surfaced to the UI
         raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.get("/api/runs/{run_id}/export")
+async def export_run(run_id: str) -> FileResponse:
+    try:
+        job = MANAGER.get(run_id)
+    except JobError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    run_dir = Path(job.run_dir)
+    if not run_dir.exists():
+        raise HTTPException(status_code=404, detail=f"Run directory missing: {run_dir}")
+    tmp = Path(tempfile.mkdtemp(prefix="topology-run-"))
+    archive = tmp / f"{run_id}.zip"
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        for path in run_dir.rglob("*"):
+            if path.is_file():
+                bundle.write(path, path.relative_to(run_dir.parent))
+    return FileResponse(archive, filename=f"{run_id}.zip", media_type="application/zip")
+
+
+@app.post("/api/runs/import")
+async def import_run(file: Annotated[UploadFile, File()]) -> dict[str, object]:
+    tmp = Path(tempfile.mkdtemp(prefix="topology-import-"))
+    archive = tmp / "upload.zip"
+    with archive.open("wb") as handle:
+        shutil.copyfileobj(file.file, handle)
+    try:
+        with zipfile.ZipFile(archive) as bundle:
+            for member in bundle.infolist():
+                target = (tmp / member.filename).resolve()
+                if not str(target).startswith(str(tmp.resolve())):
+                    raise HTTPException(status_code=422, detail="ZIP enthaelt unsichere Pfade.")
+            bundle.extractall(tmp)
+        job_files = list(tmp.rglob("job.json"))
+        if not job_files:
+            raise HTTPException(status_code=422, detail="ZIP enthaelt keine job.json.")
+        source = job_files[0].parent
+        run_id = source.name
+        target = Path.cwd() / "runs" / run_id
+        if target.exists():
+            raise HTTPException(status_code=409, detail=f"Run {run_id} existiert bereits.")
+        shutil.copytree(source, target)
+        MANAGER.reload()
+        return {"imported": run_id, "path": str(target)}
+    except zipfile.BadZipFile as exc:
+        raise HTTPException(status_code=422, detail="Datei ist kein gueltiges ZIP.") from exc
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
 
 
 @app.get("/lab", response_class=HTMLResponse)
