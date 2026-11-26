@@ -1361,3 +1361,104 @@ button {
     grid-column: span 1;
   }
 }
+
+.primary.danger {
+  color: #2a0707;
+  background: linear-gradient(120deg, #f87171, #fb923c);
+  box-shadow: 0 12px 34px rgba(248, 113, 113, 0.2);
+}
+
+.primary.danger:hover {
+  box-shadow: 0 16px 42px rgba(248, 113, 113, 0.28);
+}
+
+.prediction-panel {
+  padding: 18px;
+}
+
+.prediction-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.prediction-card {
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(4, 8, 15, 0.5);
+  padding: 9px;
+  min-width: 0;
+}
+
+.prediction-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 9px;
+  margin-bottom: 5px;
+}
+
+.prediction-head strong {
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prediction-mini {
+  height: 82px;
+  margin-bottom: 6px;
+}
+
+.prediction-values {
+  display: grid;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 9px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.prediction-values .true {
+  color: #8bd9cb;
+}
+
+.prediction-values .predicted {
+  color: #fbbf24;
+}
+
+.prediction-values .bad {
+  color: #f87171;
+}
+
+.prediction-values .label {
+  color: var(--faint);
+  font-family: var(--sans);
+  font-size: 8px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.prediction-condition {
+  color: #c4b5fd;
+  font-family: var(--mono);
+  font-size: 9px;
+  word-break: break-word;
+  max-height: 46px;
+  overflow: auto;
+}
+
+@media (max-width: 1450px) {
+  .prediction-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .prediction-grid {
+    grid-template-columns: 1fr;
+  }
+}

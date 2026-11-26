@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .config import DatasetResponse, DatasetSpec
+from .config import DatasetResponse, DatasetSpec, TransformSpec
 from .tokenizer import NumericTokenizer
 from .topology.filtration import FiltrationError, compute_persistence
 from .topology.generators import GeneratorError, generate_point_cloud
@@ -64,6 +64,7 @@ def generate_dataset(spec: DatasetSpec) -> DatasetResponse:
         raise PipelineError(str(exc)) from exc
 
     projection, projection_method = project_for_display(sample.points)
+    reference_projection, reference_name, reference_betti = _reference_cloud(spec, sample)
 
     return DatasetResponse(
         sample=sample,
@@ -74,9 +75,31 @@ def generate_dataset(spec: DatasetSpec) -> DatasetResponse:
         target_schema=schema,
         projection=projection,
         projection_method=projection_method,
+        reference_projection=reference_projection,
+        reference_structure_name=reference_name,
+        reference_betti=reference_betti,
         warnings=warnings,
         notes=notes,
     )
+
+
+def _reference_cloud(
+    spec: DatasetSpec,
+    sample,
+) -> tuple[list[list[float]], str | None, list[int]]:
+    """Canonical comparison cloud for the UI only; never fed to the model."""
+    try:
+        reference_spec = spec.model_copy(
+            update={
+                "seed": 0,
+                "transform": TransformSpec(seed=0),
+            }
+        )
+        reference = generate_point_cloud(reference_spec)
+        projection, _ = project_for_display(reference.points)
+        return projection, reference.structure_name, list(reference.theoretical_betti)
+    except Exception:
+        return [], None, list(sample.theoretical_betti)
 
 
 def project_for_display(

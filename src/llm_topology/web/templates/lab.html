@@ -68,6 +68,7 @@
             <label class="control"><span>Filtration</span><select id="method-train"><option value="alpha">Alpha</option><option value="rips">Rips</option></select></label>
             <label class="control"><span>Field</span><select id="field-train"><option value="Z2">Z2</option><option value="Z3">Z3 (Q-proxy)</option></select></label>
             <label class="control"><span>Max homology dim</span><input type="number" id="maxdim-train" min="0" max="6" value="2"></label>
+            <label class="control"><span>Augment strength</span><input type="number" id="augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
             <label class="control checkbox"><input type="checkbox" id="augment-train" checked><span>Random transforms</span></label>
           </div>
         </details>
@@ -111,11 +112,10 @@
           </div>
         </details>
 
-        <button type="button" class="primary" id="start-training">
+        <button type="button" class="primary" id="train-toggle">
           <span class="btn-spinner" aria-hidden="true"></span>
           <span class="btn-label">Start training</span>
         </button>
-        <button type="button" class="ghost stop-button" id="stop-training">Stop current run</button>
       </div>
 
       <div class="tab-pane" id="interpret-controls">
@@ -168,6 +168,16 @@
             <pre class="stream" id="sample-generate">—</pre>
           </article>
         </div>
+
+        <article class="panel prediction-panel">
+          <div class="panel-heading compact">
+            <div><span class="eyebrow">LIVE VALIDATION</span><h2>What the model sees and predicts</h2></div>
+            <span class="chip chip-mono">input cloud · true target · prediction</span>
+          </div>
+          <div id="prediction-pairs" class="prediction-grid">
+            <span class="muted">Validation pairs appear after the first epoch.</span>
+          </div>
+        </article>
 
         <article class="panel runs-panel">
           <div class="panel-heading compact"><div><span class="eyebrow">HISTORY</span><h2>Runs</h2></div><button type="button" class="ghost small" id="refresh-runs">refresh</button></div>

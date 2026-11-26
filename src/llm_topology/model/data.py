@@ -65,11 +65,15 @@ def _random_transform(spec: DataBuildSpec, seed: int) -> TransformSpec:
     if not spec.augment:
         return TransformSpec(seed=seed)
     rng = np.random.default_rng(seed)
+    strength = spec.augment_strength
     return TransformSpec(
         rotation_deg=tuple(rng.uniform(-180, 180, size=3).tolist()),
-        stretch=tuple(rng.uniform(0.82, 1.18, size=3).tolist()),
-        twist=float(rng.uniform(-0.45, 0.45)),
-        noise=float(rng.uniform(0, 0.012)),
+        stretch=tuple(rng.uniform(1 - 0.22 * strength, 1 + 0.22 * strength, size=3).tolist()),
+        twist=float(rng.uniform(-0.8, 0.8) * strength),
+        shear=tuple(rng.uniform(-0.45, 0.45, size=3).tolist() * strength),
+        bend=float(rng.uniform(-0.55, 0.55) * strength),
+        warp=float(rng.uniform(-0.6, 0.6) * strength),
+        noise=float(rng.uniform(0, 0.015) * strength),
         permute=True,
         seed=seed + 13,
     )

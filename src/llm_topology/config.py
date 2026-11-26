@@ -40,6 +40,9 @@ class TransformSpec(BaseModel):
     rotation_deg: tuple[float, float, float] = (0.0, 0.0, 0.0)
     stretch: tuple[float, float, float] = (1.0, 1.0, 1.0)
     twist: float = 0.0
+    shear: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    bend: float = 0.0
+    warp: float = 0.0
     translation: tuple[float, float, float] = (0.0, 0.0, 0.0)
     noise: float = 0.0
     permute: bool = False
@@ -183,6 +186,9 @@ class DatasetResponse(BaseModel):
     target_schema: TargetSchema
     projection: list[list[float]] = Field(default_factory=list)
     projection_method: str = "first-3"
+    reference_projection: list[list[float]] = Field(default_factory=list)
+    reference_structure_name: str | None = None
+    reference_betti: list[int] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
 

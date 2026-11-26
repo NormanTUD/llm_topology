@@ -95,6 +95,7 @@ class DataBuildSpec(BaseModel):
     max_seq_len: int = Field(default=1024, ge=64, le=32768)
     task_mix: float = Field(default=0.5, ge=0, le=1)
     augment: bool = True
+    augment_strength: float = Field(default=0.35, ge=0, le=1)
     seed: int = 0
     filtration: FiltrationSpec = Field(default_factory=FiltrationSpec)
     target_schema: TargetSchema = Field(default_factory=TargetSchema)

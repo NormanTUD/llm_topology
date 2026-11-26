@@ -229,6 +229,13 @@ function buildSpec() {
         Math.max(0.01, numberValue("stretch_z", 1)),
       ],
       twist: numberValue("twist", 0),
+      shear: [
+        numberValue("shear_xy", 0),
+        numberValue("shear_xz", 0),
+        numberValue("shear_yz", 0),
+      ],
+      bend: numberValue("bend", 0),
+      warp: numberValue("warp", 0),
       translation: [0, 0, 0],
       noise: Math.max(0, numberValue("noise", 0)),
       permute: $('[name="permute"]').checked,
@@ -414,9 +421,10 @@ function renderCloud(data) {
     element.innerHTML = '<div class="plot-placeholder">Plotly could not be loaded.</div>';
     return;
   }
+  element.innerHTML = "";
   const projected = data.projection;
   const colors = projected.map((_, index) => index);
-  const trace = {
+  const traces = [{
     type: "scatter3d",
     mode: "markers",
     x: projected.map((point) => point[0]),
@@ -435,9 +443,24 @@ function renderCloud(data) {
       line: { width: 0 },
     },
     hovertemplate: "p %{pointNumber}<br>x %{x:.3f}<br>y %{y:.3f}<br>z %{z:.3f}<extra></extra>",
-  };
+  }];
+  const reference = data.reference_projection || [];
+  if (reference.length) {
+    traces.push({
+      type: "scatter3d",
+      mode: "markers",
+      name: "canonical reference",
+      x: reference.map((point) => point[0]),
+      y: reference.map((point) => point[1]),
+      z: reference.map((point) => point[2]),
+      marker: { size: 2, color: "rgba(180,195,220,.55)", symbol: "circle-open", opacity: 0.7 },
+      hovertemplate: "reference<extra></extra>",
+    });
+  }
   const layout = plotlyLayout({
     margin: { l: 0, r: 0, t: 0, b: 0 },
+    showlegend: true,
+    legend: { orientation: "h", y: 1.02, x: 0, font: { size: 9 } },
     scene: {
       bgcolor: "rgba(0,0,0,0)",
       xaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
@@ -447,7 +470,13 @@ function renderCloud(data) {
       aspectmode: "data",
     },
   });
-  window.Plotly.newPlot(element, [trace], layout, plotConfig());
+  window.Plotly.newPlot(element, traces, layout, plotConfig());
+  const referenceChip = $("#reference-chip");
+  if (referenceChip) {
+    referenceChip.textContent = data.reference_structure_name
+      ? `reference: ${data.reference_structure_name} (not model input)`
+      : "reference: —";
+  }
 }
 
 function renderPersistence(data) {
@@ -456,6 +485,7 @@ function renderPersistence(data) {
     element.innerHTML = '<div class="plot-placeholder">Plotly could not be loaded.</div>';
     return;
   }
+  element.innerHTML = "";
   const diagrams = data.persistence.diagrams;
   const allDeaths = diagrams.flat().map((pair) => pair[1]).filter((value) => value !== null);
   const maxFinite = allDeaths.length ? Math.max(...allDeaths) : data.persistence.epsilon;
@@ -513,6 +543,7 @@ function renderBetti(data) {
     element.innerHTML = '<div class="plot-placeholder">Plotly could not be loaded.</div>';
     return;
   }
+  element.innerHTML = "";
   const grid = data.persistence.epsilon_grid;
   const curve = data.persistence.betti_curve;
   const traces = [];
@@ -526,6 +557,21 @@ function renderBetti(data) {
       y: curve.map((row) => row[dimension]),
       line: { color: COLORS[dimension % COLORS.length], width: 2, shape: "hv" },
       hovertemplate: `${DIM_NAMES[dimension] || `H${dimension}`} = %{y}<br>epsilon %{x:.3f}<extra></extra>`,
+    });
+  }
+  const reference = data.reference_betti || [];
+  if (reference.length) {
+    reference.forEach((value, dimension) => {
+      traces.push({
+        type: "scatter",
+        mode: "lines",
+        name: `reference b${dimension}`,
+        x: [0, grid[grid.length - 1] || 1],
+        y: [value, value],
+        line: { color: COLORS[dimension % COLORS.length], width: 1, dash: "dot" },
+        hoverinfo: "skip",
+        opacity: 0.55,
+      });
     });
   }
   const layout = plotlyLayout({

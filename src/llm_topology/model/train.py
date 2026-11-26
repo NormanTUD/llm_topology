@@ -15,7 +15,8 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from ..config import StructureKind
-from ..tokenizer import NumericTokenizer
+from ..pipeline import project_for_display
+from ..tokenizer import NumericTokenizer, parse_target_groups
 from .config import TrainingSpec
 from .data import DatasetBundle, TokenDataset, build_dataset, collate_examples
 from .transformer import TopologyTransformer
@@ -91,6 +92,26 @@ def _pad_rows(rows: list[list[int]], pad_id: int) -> torch.Tensor:
     return tensor
 
 
+def _parse_generated_points(text: str, ambient_dim: int) -> list[list[float]]:
+    cleaned = (
+        text.replace("<eos>", "")
+        .replace("<pad>", "")
+        .replace("<endoftext>", "")
+        .strip()
+    )
+    points: list[list[float]] = []
+    for chunk in cleaned.split(";"):
+        values = []
+        for raw in chunk.split(","):
+            try:
+                values.append(float(raw))
+            except ValueError:
+                continue
+        if len(values) >= 2:
+            points.append(values[:ambient_dim])
+    return points if len(points) >= 3 else []
+
+
 def _answer_mask(prefix_length: int, total_length: int) -> list[bool]:
     mask = [False] * total_length
     for index in range(prefix_length - 1, total_length - 1):
@@ -133,6 +154,7 @@ class Trainer:
             self.bundle.val[0],
         )
         self._rng = random.Random(spec.training.seed)
+        self.schema = self.bundle.data_spec.target_schema
 
     def _optimizer(self) -> torch.optim.Optimizer:
         config = self.spec.training
@@ -318,6 +340,79 @@ class Trainer:
         self.model.train()
         return output
 
+    @torch.no_grad()
+    def _prediction_samples(self) -> list[dict[str, Any]]:
+        self.model.eval()
+        samples: list[dict[str, Any]] = []
+        infer_examples = [example for example in self.bundle.val if example.task == "infer"][:2]
+        for example in infer_examples:
+            prompt = torch.tensor([example.prefix_ids], dtype=torch.long, device=self.device)
+            generated = self.model.generate(
+                prompt,
+                max_new_tokens=min(48, self.spec.training.max_new_tokens),
+                eos_id=self.eos_id,
+            )
+            continuation = generated[0, len(example.prefix_ids) :].tolist()
+            predicted_text = self.tokenizer.decode(continuation).replace("<eos>", "").strip()
+            predicted_groups = None
+            parse_error = None
+            try:
+                predicted_groups = parse_target_groups(predicted_text, self.schema)
+            except Exception as exc:
+                parse_error = str(exc)
+            projection, _ = project_for_display(example.points)
+            predicted_betti = (
+                predicted_groups[0]
+                if predicted_groups and len(predicted_groups) > 0
+                else None
+            )
+            predicted_ph = (
+                predicted_groups[1]
+                if predicted_groups and len(predicted_groups) > 1
+                else None
+            )
+            samples.append(
+                {
+                    "task": "infer",
+                    "structure_name": example.structure_name,
+                    "input_projection": projection,
+                    "true_text": example.target_text,
+                    "true_groups": example.target_groups,
+                    "predicted_text": predicted_text,
+                    "predicted_groups": predicted_groups,
+                    "predicted_betti": predicted_betti,
+                    "predicted_ph": predicted_ph,
+                    "true_betti": example.betti,
+                    "true_ph": example.ph,
+                    "parse_error": parse_error,
+                }
+            )
+
+        generation_examples = [example for example in self.bundle.val if example.task == "generate"][:1]
+        for example in generation_examples:
+            prompt = torch.tensor([example.prefix_ids], dtype=torch.long, device=self.device)
+            generated = self.model.generate(
+                prompt,
+                max_new_tokens=min(32, self.spec.training.max_new_tokens),
+                eos_id=self.eos_id,
+            )
+            continuation = generated[0, len(example.prefix_ids) :].tolist()
+            generated_text = self.tokenizer.decode(continuation).replace("<eos>", "").strip()
+            generated_points = _parse_generated_points(generated_text, self.spec.data.ambient_dim)
+            generated_projection, _ = project_for_display(generated_points) if generated_points else ([], "")
+            samples.append(
+                {
+                    "task": "generate",
+                    "structure_name": example.structure_name,
+                    "condition_text": example.target_text,
+                    "generated_text": generated_text,
+                    "generated_projection": generated_projection,
+                    "true_text": example.target_text,
+                }
+            )
+        self.model.train()
+        return samples
+
     def _save_checkpoint(self, path: Path, *, epoch: int, metrics: dict[str, float]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -342,6 +437,13 @@ class Trainer:
         stop_event=None,
     ) -> TrainingResult:
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        tag = f"[{self.checkpoint_dir.name}]"
+        print(
+            f"{tag} start train={len(self.bundle.train)} val={len(self.bundle.val)} "
+            f"params={self.model.parameter_count()} device={self.device} "
+            f"max_seq_len={self.spec.model.max_seq_len}",
+            flush=True,
+        )
         loader = DataLoader(
             TokenDataset(self.bundle.train),
             batch_size=self.spec.training.batch_size,
@@ -356,6 +458,7 @@ class Trainer:
         stale_epochs = 0
         status = "completed"
         for epoch in range(1, self.spec.training.epochs + 1):
+            print(f"{tag} epoch {epoch}/{self.spec.training.epochs} start", flush=True)
             epoch_loss = 0.0
             epoch_ce = 0.0
             epoch_aux = 0.0
@@ -388,6 +491,13 @@ class Trainer:
                 epoch_ce += float(ce.detach().cpu())
                 epoch_aux += float(aux.detach().cpu())
                 epoch_rank += float(rank.detach().cpu())
+                print(
+                    f"{tag} epoch {epoch} batch {batches}/{len(loader)} "
+                    f"loss={epoch_loss / batches:.4f} ce={epoch_ce / batches:.4f} "
+                    f"aux={epoch_aux / batches:.4f} rank={epoch_rank / batches:.4f} "
+                    f"lr={scheduler.get_last_lr()[0]:.2e}",
+                    flush=True,
+                )
                 if callback is not None:
                     callback(
                         {
@@ -415,14 +525,22 @@ class Trainer:
                 "lr": scheduler.get_last_lr()[0],
             }
             val_metrics = self._evaluate()
+            print(f"{tag} validation {val_metrics}", flush=True)
             samples = self._sample_generation()
+            prediction_samples = self._prediction_samples()
             self.samples = samples
-            metrics = {**train_metrics, **val_metrics, "samples": samples}
+            metrics = {
+                **train_metrics,
+                **val_metrics,
+                "samples": samples,
+                "prediction_samples": prediction_samples,
+            }
             self.history.append(metrics)
             improved = val_metrics["val_loss"] < self.best_val_loss - 1e-6
             if improved:
                 self.best_val_loss = val_metrics["val_loss"]
                 self._save_checkpoint(self.best_checkpoint, epoch=epoch, metrics=metrics)
+                print(f"{tag} checkpoint best.pt epoch={epoch} val={self.best_val_loss:.4f}", flush=True)
                 stale_epochs = 0
             else:
                 stale_epochs += 1
@@ -431,6 +549,7 @@ class Trainer:
                 callback({"type": "epoch", **metrics})
             if stale_epochs >= self.spec.training.patience:
                 status = "early_stopped"
+                print(f"{tag} early stop after epoch {epoch}", flush=True)
                 break
         self._save_history()
         if not self.best_checkpoint.exists():
@@ -439,6 +558,7 @@ class Trainer:
                 epoch=len(self.history),
                 metrics=self.history[-1] if self.history else {},
             )
+        print(f"{tag} finished status={status} best_val={self.best_val_loss:.4f}", flush=True)
         return TrainingResult(
             history=self.history,
             best_val_loss=self.best_val_loss,

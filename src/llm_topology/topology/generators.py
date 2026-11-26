@@ -447,6 +447,17 @@ def _apply_transform(points: np.ndarray, spec: DatasetSpec) -> np.ndarray:
     dim = min(3, out.shape[1])
     out[:, :dim] *= stretch[:dim]
 
+    if out.shape[1] >= 2:
+        sx, sy, sz = transform.shear
+        x = out[:, 0].copy()
+        y = out[:, 1].copy()
+        if out.shape[1] >= 3:
+            z = out[:, 2].copy()
+            out[:, 0] = x + sx * y + sy * z
+            out[:, 1] = y + sz * z
+        else:
+            out[:, 0] = x + sx * y
+
     if abs(transform.twist) > 1e-12 and out.shape[1] >= 3:
         z = out[:, 2]
         scale = np.std(z)
@@ -456,6 +467,24 @@ def _apply_transform(points: np.ndarray, spec: DatasetSpec) -> np.ndarray:
             y = out[:, 1].copy()
             out[:, 0] = x * np.cos(angle) - y * np.sin(angle)
             out[:, 1] = x * np.sin(angle) + y * np.cos(angle)
+
+    if abs(transform.bend) > 1e-12 and out.shape[1] >= 2:
+        x = out[:, 0]
+        scale = float(np.std(x))
+        if scale > 1e-12:
+            out[:, 1] = out[:, 1] + transform.bend * scale * np.sin(x / scale)
+
+    if abs(transform.warp) > 1e-12 and out.shape[1] >= 2:
+        scale = max(float(np.std(out)), 1e-12)
+        amplitude = 0.18 * transform.warp * scale
+        phase = transform.seed * 0.017
+        x = out[:, 0].copy()
+        y = out[:, 1].copy()
+        out[:, 0] = x + amplitude * np.sin(2 * math.pi * y / scale + phase)
+        out[:, 1] = y + amplitude * np.sin(2 * math.pi * x / scale + phase)
+        if out.shape[1] >= 3:
+            z = out[:, 2].copy()
+            out[:, 2] = z + amplitude * np.sin(2 * math.pi * x / scale + phase)
 
     translation = np.asarray(transform.translation, dtype=float)
     dim = min(3, out.shape[1])

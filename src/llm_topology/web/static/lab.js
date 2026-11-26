@@ -225,6 +225,7 @@ function buildSpec() {
       max_seq_len: context,
       task_mix: Math.min(1, Math.max(0, numberValue("task-mix", 0.5))),
       augment: $("#augment-train").checked,
+      augment_strength: Math.min(1, Math.max(0, numberValue("augment-strength", 0.35))),
       seed: intValue("seed-train", -2147483648, 2147483647, 0),
       filtration,
       target_schema: schemaForMaxDim(maxDim),
