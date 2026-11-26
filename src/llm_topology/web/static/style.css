@@ -1538,7 +1538,7 @@ input[type="range"] {
 
 .dataset-builder-grid {
   display: grid;
-  grid-template-columns: 1.6fr repeat(4, minmax(0, 1fr)) 1.1fr;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 8px;
   align-items: end;
 }

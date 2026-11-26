@@ -224,6 +224,7 @@
           <label class="control"><span>Name</span><input type="text" id="dataset-name" value="topology-set"></label>
           <label class="control"><span>Train samples</span><input type="number" id="dataset-n-train" min="4" max="5000" value="48"></label>
           <label class="control"><span>Val samples</span><input type="number" id="dataset-n-val" min="2" max="1000" value="16"></label>
+          <label class="control"><span>Points</span><input type="number" id="dataset-n-points" min="8" max="512" value="32"></label>
           <label class="control"><span>Context</span><input type="number" id="dataset-context" min="64" max="32768" value="1024"></label>
           <label class="control"><span>Precision</span><input type="number" id="dataset-precision" min="1" max="8" value="3"></label>
           <label class="control"><span>Task mix</span><input type="number" id="dataset-task-mix" min="0" max="1" step="0.05" value="0.5"></label>
@@ -236,7 +237,8 @@
             <span class="btn-label">Build & save dataset</span>
           </button>
         </div>
-        <div class="form-hint">Uses the current structure recipe, target schema and filtration mode (auto or manual epsilon). Saved under <code>datasets/ds-NNNN/</code>.</div>
+        <div class="form-hint" id="dataset-budget">Uses the current structure recipe, target schema and filtration mode (auto or manual epsilon).</div>
+        <div class="form-hint">Saved under <code>datasets/ds-NNNN/</code>.</div>
       </article>
 
       <div class="metrics-grid">

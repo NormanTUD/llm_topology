@@ -879,6 +879,23 @@ async function copyText(text, label) {
   }
 }
 
+function updateDatasetBudget() {
+  const points = clampInt($("#dataset-n-points")?.value, 8, 512, 32);
+  const ambient = clampInt($("#ambient-dim")?.value, 2, 64, 3);
+  const precision = clampInt($("#dataset-precision")?.value, 1, 8, 3);
+  const context = clampInt($("#dataset-context")?.value, 64, 32768, 1024);
+  const estimated = points * ambient * (precision + 3) + 96;
+  const budget = $("#dataset-budget");
+  const button = $("#build-dataset");
+  if (budget) {
+    const fits = estimated <= context;
+    budget.textContent = `Estimated token budget: ~${estimated} / context ${context}. ` +
+      (fits ? "Fits." : "Increase context or reduce points/precision.");
+    budget.style.color = fits ? "" : "var(--red)";
+  }
+  if (button) button.disabled = estimated > context;
+}
+
 function structuresForAmbient(structures, ambient) {
   const available = new Set(
     state.catalog.structures
@@ -889,13 +906,19 @@ function structuresForAmbient(structures, ambient) {
 }
 
 async function buildTrainingDataset() {
-  clearError();
+  hideError();
   const button = $("#build-dataset");
   button.disabled = true;
   button.classList.add("loading");
   button.querySelector(".btn-label").textContent = "Building dataset…";
   try {
     const base = buildSpec();
+    updateDatasetBudget();
+    const estimated = clampInt($("#dataset-n-points").value, 8, 512, 32) *
+      base.ambient_dim * (clampInt($("#dataset-precision").value, 1, 8, 3) + 3) + 96;
+    if (estimated > clampInt($("#dataset-context").value, 64, 32768, 1024)) {
+      throw new Error("Dataset token budget exceeds context. Increase context or reduce points/precision.");
+    }
     const mode = $("#batch-mode").value;
     let structures = mode === "mix" ? selectedBatchStructures() : [base.structure];
     structures = structuresForAmbient(structures, base.ambient_dim);
@@ -907,7 +930,7 @@ async function buildTrainingDataset() {
       structures,
       n_train: clampInt($("#dataset-n-train").value, 4, 5000, 48),
       n_val: clampInt($("#dataset-n-val").value, 2, 1000, 16),
-      n_points: base.n_points,
+      n_points: clampInt($("#dataset-n-points").value, 8, 512, 32),
       ambient_dim: base.ambient_dim,
       copies: base.copies,
       genus: base.genus,
@@ -978,6 +1001,7 @@ async function boot() {
   syncBatchStructureAvailability();
   syncMethodVisibility();
   syncEpsilonVisibility();
+  updateDatasetBudget();
   $("#structure-select").addEventListener("change", syncStructureVisibility);
   $("#ambient-dim").addEventListener("input", syncBatchStructureAvailability);
   $("#ambient-dim").addEventListener("change", syncBatchStructureAvailability);
@@ -1017,8 +1041,16 @@ async function boot() {
   form.addEventListener("input", onControlChange);
   form.addEventListener("change", onControlChange);
   $("#target-blocks").addEventListener("change", onControlChange);
-  $("#dataset-builder").addEventListener("input", persistDataState);
-  $("#dataset-builder").addEventListener("change", persistDataState);
+  $("#dataset-builder").addEventListener("input", () => {
+    persistDataState();
+    updateDatasetBudget();
+  });
+  $("#dataset-builder").addEventListener("change", () => {
+    persistDataState();
+    updateDatasetBudget();
+  });
+  $("#ambient-dim").addEventListener("input", updateDatasetBudget);
+  $("#ambient-dim").addEventListener("change", updateDatasetBudget);
   $("#batch-structure-checks").addEventListener("change", onControlChange);
   $("#build-dataset").addEventListener("click", buildTrainingDataset);
   if (saved.lastBatch && Array.isArray(saved.lastBatch) && saved.lastBatch.length) {

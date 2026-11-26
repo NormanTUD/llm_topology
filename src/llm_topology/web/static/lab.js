@@ -1158,6 +1158,7 @@ function updateDatasetMeta() {
 
 function setTab(tab) {
   labState.view = tab;
+  saveUIState({ labTab: tab });
   $$(".lab-tab").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
   $("#train-controls").classList.toggle("active", tab === "train");
   $("#interpret-controls").classList.toggle("active", tab === "interpret");
@@ -1223,6 +1224,7 @@ async function boot() {
   try {
     await loadCatalog();
     const saved = await loadUIState();
+    if (saved.labTab) setTab(saved.labTab);
     applyById(saved.labForm || {});
     applyById(saved.freshForm || {});
     await loadDatasets(saved.datasetId);
