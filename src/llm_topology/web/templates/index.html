@@ -28,6 +28,7 @@
     <div class="topbar-meta">
       <span class="chip chip-live" id="phase-chip">Phase 0 · Data foundation</span>
       <span class="chip" id="health-chip">booting</span>
+      <button type="button" class="chip chip-mono" id="mode-toggle" title="Switch between simple and expert controls">Simple</button>
       <span class="chip chip-mono" id="version-chip">v0.1.0</span>
     </div>
   </header>
@@ -75,22 +76,22 @@
             <input type="number" name="copies" id="copies" min="1" max="1000" step="1" value="1">
           </label>
 
-          <label class="control">
+          <label class="control expert-only">
             <span>Components min</span>
             <input type="number" name="copies_min" id="copies-min" min="1" max="1000" step="1" placeholder="fixed">
           </label>
 
-          <label class="control">
+          <label class="control expert-only">
             <span>Components max</span>
             <input type="number" name="copies_max" id="copies-max" min="1" max="1000" step="1" placeholder="fixed">
           </label>
 
-          <label class="control">
+          <label class="control expert-only">
             <span>Points per component</span>
             <input type="number" name="points_per_component" id="points-per-component" min="4" max="2048" step="1" placeholder="total only">
           </label>
 
-          <label class="control">
+          <label class="control expert-only">
             <span>String precision</span>
             <input type="number" name="precision" id="precision" min="1" max="8" step="1" value="5">
           </label>
@@ -118,7 +119,7 @@
             <input type="number" name="batch_count" id="batch-count" min="1" max="24" step="1" value="6">
           </label>
 
-          <label class="control checkbox">
+          <label class="control checkbox expert-only">
             <input type="checkbox" name="vary_transform" id="vary-transform">
             <span>Randomize per cloud</span>
           </label>
@@ -139,7 +140,7 @@
           </label>
         </div>
 
-        <details class="section">
+        <details class="section expert-only">
           <summary>Geometry transforms <span class="summary-note">diffeomorphic; not shown to the model</span></summary>
           <div class="control-grid">
             <label class="control"><span>Rotate x</span><input type="number" name="rot_x" step="1" value="0"></label>
@@ -162,7 +163,7 @@
           </div>
         </details>
 
-        <details class="section" open>
+        <details class="section expert-only" open>
           <summary>Filtration <span class="summary-note">alpha default</span></summary>
           <div class="control-grid">
             <label class="control">
@@ -198,7 +199,7 @@
           </div>
         </details>
 
-        <details class="section">
+        <details class="section expert-only">
           <summary>Target groups <span class="summary-note">fixed order, separated by ;</span></summary>
           <div id="target-blocks" class="target-blocks"></div>
         </details>
@@ -216,6 +217,7 @@
       <div class="action-bar">
         <button type="button" class="primary" id="top-generate">Generate batch</button>
         <button type="button" class="ghost" id="top-build-dataset">Build dataset</button>
+        <button type="button" class="ghost" id="quick-demo">Quick demo</button>
       </div>
       <div id="error-banner" class="banner error hidden"></div>
       <div id="warning-list" class="warning-list"></div>
@@ -251,16 +253,16 @@
           <label class="control"><span>Val samples</span><input type="number" id="dataset-n-val" min="2" max="1000" value="16"></label>
           <label class="control"><span>Test samples</span><input type="number" id="dataset-n-test" min="2" max="1000" value="8"></label>
           <label class="control"><span>Points total</span><input type="number" id="dataset-n-points" min="8" max="4096" value="32"></label>
-          <label class="control"><span>Points per component</span><input type="number" id="dataset-points-per-component" min="8" max="2048" placeholder="optional"></label>
+          <label class="control expert-only"><span>Points per component</span><input type="number" id="dataset-points-per-component" min="8" max="2048" placeholder="optional"></label>
           <label class="control"><span>Context</span><input type="number" id="dataset-context" min="64" max="32768" value="1024"></label>
-          <label class="control"><span>Precision</span><input type="number" id="dataset-precision" min="1" max="8" value="5"></label>
-          <label class="control"><span>Task mix</span><input type="number" id="dataset-task-mix" min="0" max="1" step="0.05" value="0.5"></label>
-          <label class="control"><span>Train augment strength</span><input type="number" id="dataset-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
-          <label class="control"><span>Val augment strength</span><input type="number" id="dataset-val-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
-          <label class="control"><span>Test augment strength</span><input type="number" id="dataset-test-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
-          <label class="control"><span>Val transforms</span><select id="dataset-val-transform-mode"><option value="clean">clean</option><option value="same" selected>same</option><option value="heldout">heldout</option></select></label>
-          <label class="control"><span>Test transforms</span><select id="dataset-test-transform-mode"><option value="clean">clean</option><option value="same">same</option><option value="heldout" selected>heldout</option></select></label>
-          <label class="control checkbox"><input type="checkbox" id="dataset-augment" checked><span>Train transforms</span></label>
+          <label class="control expert-only"><span>Precision</span><input type="number" id="dataset-precision" min="1" max="8" value="5"></label>
+          <label class="control expert-only"><span>Task mix</span><input type="number" id="dataset-task-mix" min="0" max="1" step="0.05" value="0.5"></label>
+          <label class="control expert-only"><span>Train augment strength</span><input type="number" id="dataset-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
+          <label class="control expert-only"><span>Val augment strength</span><input type="number" id="dataset-val-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
+          <label class="control expert-only"><span>Test augment strength</span><input type="number" id="dataset-test-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
+          <label class="control expert-only"><span>Val transforms</span><select id="dataset-val-transform-mode"><option value="clean">clean</option><option value="same" selected>same</option><option value="heldout">heldout</option></select></label>
+          <label class="control expert-only"><span>Test transforms</span><select id="dataset-test-transform-mode"><option value="clean">clean</option><option value="same">same</option><option value="heldout" selected>heldout</option></select></label>
+          <label class="control checkbox expert-only"><input type="checkbox" id="dataset-augment" checked><span>Train transforms</span></label>
           <button type="button" class="primary" id="build-dataset">
             <span class="btn-spinner" aria-hidden="true"></span>
             <span class="btn-label">Build & save dataset</span>

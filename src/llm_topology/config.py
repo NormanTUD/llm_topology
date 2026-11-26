@@ -88,6 +88,11 @@ class TargetBlock(BaseModel):
 
 
 def default_target_blocks(max_dim: int = 2) -> list[TargetBlock]:
+    """Beginner default: only the generator Betti numbers."""
+    return [TargetBlock(name="betti", fields=[f"b{i}" for i in range(max_dim + 1)])]
+
+
+def all_target_blocks(max_dim: int = 2) -> list[TargetBlock]:
     betti_fields = [f"b{i}" for i in range(max_dim + 1)]
     return [
         TargetBlock(name="betti", fields=betti_fields),

@@ -94,6 +94,11 @@ Data Foundation:
 - Persistenzdiagramme, Betti-Zahlen und Betti-Kurven,
 - automatische Wahl eines Filtrationsskalenpunkts,
 - Z2 und Z3 als Q-Proxy,
+- Simple/Expert-Modus: Einsteiger sehen nur die wichtigsten Regler,
+  Expertinnen und Experten bekommen alles,
+- Quick-Demo-Button fuer einen schnellen Torus-Durchlauf,
+- Default-Ziel ist nur `betti`, weitere Zielgruppen sind im Expert-Modus
+  zuschaltbar,
 - Batch-Galerie mit mehreren Punktwolken,
 - Batch-Modus `single` oder `mix` mit expliziter Strukturauswahl,
 - Live-Update der Geometrie bei Regleränderungen,
@@ -453,7 +458,12 @@ nicht neu. UI-Zustand, letzte Punktwolken-Batch und Trainingslauf werden
 serverseitig gespeichert und nach F5 wiederhergestellt.
 
 1. **Data Studio**
-   - Batch-Galerie mit mehreren Punktwolken,
+   - Simple/Expert-Modus: Einsteiger sehen nur die wichtigsten Regler,
+  Expertinnen und Experten bekommen alles,
+- Quick-Demo-Button fuer einen schnellen Torus-Durchlauf,
+- Default-Ziel ist nur `betti`, weitere Zielgruppen sind im Expert-Modus
+  zuschaltbar,
+- Batch-Galerie mit mehreren Punktwolken,
    - Auswahl einer Wolke für die Detailansicht,
    - Batch-Modus `single`/`mix`, Live-Update, Strukturauswahl,
    - Strukturkatalog, Transformationen inklusive Shear/Bend/Warp,

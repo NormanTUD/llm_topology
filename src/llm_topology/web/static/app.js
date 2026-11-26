@@ -219,7 +219,7 @@ function renderTargetBlocks() {
   const container = $("#target-blocks");
   if (!state.catalog) return;
   const checkedBefore = new Set(selectedTargetNames());
-  const initial = checkedBefore.size ? checkedBefore : new Set(["betti", "ph", "genus", "n_components", "filtration"]);
+  const initial = checkedBefore.size ? checkedBefore : new Set(["betti"]);
   const maxDim = clampInt($("#max-dim")?.value, 0, 6, 2);
   container.innerHTML = "";
   for (const block of state.catalog.target_blocks) {
@@ -1045,6 +1045,32 @@ async function updateDataPlausibility() {
   }, 450);
 }
 
+function setControl(id, value) {
+  const element = document.getElementById(id);
+  if (!element) return;
+  if (element.type === "checkbox") element.checked = Boolean(value);
+  else element.value = String(value);
+  element.dispatchEvent(new Event("input", { bubbles: true }));
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+async function quickDemo() {
+  setControl("structure-select", "torus");
+  setControl("n-points", 400);
+  setControl("copies", 1);
+  setControl("copies-min", "");
+  setControl("copies-max", "");
+  setControl("points-per-component", "");
+  setControl("precision", 5);
+  setControl("batch-mode", "single");
+  setControl("batch-count", 3);
+  setControl("live-preview", false);
+  applyTargetBlockState(["betti"]);
+  syncStructureVisibility();
+  syncBatchMode();
+  await generate();
+}
+
 let liveTimer = null;
 function scheduleLiveGenerate() {
   if (!$("#live-preview")?.checked) return;
@@ -1136,6 +1162,7 @@ async function boot() {
   $("#batch-structure-checks").addEventListener("change", onControlChange);
   $("#build-dataset").addEventListener("click", buildTrainingDataset);
   $("#top-generate").addEventListener("click", () => generate());
+  $("#quick-demo").addEventListener("click", quickDemo);
   $("#top-build-dataset").addEventListener("click", () => {
     document.querySelector("#dataset-builder")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });

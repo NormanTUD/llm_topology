@@ -52,7 +52,7 @@ def test_generate_small_dataset() -> None:
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["sample"]["n_points"] == 60
-    assert len(body["target_groups"]) == 5
+    assert len(body["target_groups"]) == 1
     assert "<endoftext>" in body["sequence"]
     assert body["projection"]
     assert len(body["projection"][0]) == 3
@@ -289,7 +289,7 @@ def test_target_parse_endpoint() -> None:
 
 
 def test_target_parse_reports_shape_error() -> None:
-    response = client.post("/api/targets/parse", json={"text": "1,2,1"})
+    response = client.post("/api/targets/parse", json={"text": "1,2,1;1,2,1"})
     assert response.status_code == 422
     detail = response.json()["detail"]
-    assert detail["expected"] == 5
+    assert detail["expected"] == 1

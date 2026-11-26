@@ -23,7 +23,7 @@ from ..config import (
     StructureKind,
     TargetSchema,
     TransformSpec,
-    default_target_blocks,
+    all_target_blocks,
     optional_target_blocks,
 )
 from ..datasets import STORE as DATASET_STORE
@@ -154,7 +154,7 @@ def _catalog() -> CatalogResponse:
     ]
     blocks = [
         {"name": block.name, "fields": block.fields, "optional": False}
-        for block in default_target_blocks(max_dim=2)
+        for block in all_target_blocks(max_dim=2)
     ]
     blocks.extend(
         {"name": block.name, "fields": block.fields, "optional": True}
@@ -480,7 +480,8 @@ async def analyze_job(job_id: str, spec: AnalysisSpec | None = None) -> dict[str
     except JobError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # pragma: no cover - surfaced to the UI
-        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+        status = 422 if type(exc).__name__ == "AnalysisError" else 500
+        raise HTTPException(status_code=status, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
 @app.post("/api/predict/{job_id}")

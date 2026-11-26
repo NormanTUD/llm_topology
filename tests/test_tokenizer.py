@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from llm_topology.config import TargetBlock, TargetSchema, default_target_blocks
+from llm_topology.config import TargetBlock, TargetSchema, all_target_blocks
 from llm_topology.tokenizer import (
     DEFAULT_BOUNDARY,
     NumericTokenizer,
@@ -58,7 +58,7 @@ def test_serialize_points() -> None:
 
 
 def test_target_roundtrip_default_schema() -> None:
-    schema = TargetSchema(blocks=default_target_blocks(max_dim=2))
+    schema = TargetSchema(blocks=all_target_blocks(max_dim=2))
     groups = [[1, 4, 1], [1, 3, 1], [2], [1], [0, 2, 0.5, 2]]
     text = serialize_target_groups(groups)
     assert text == "1,4,1;1,3,1;2;1;0,2,0.5,2"
@@ -72,7 +72,7 @@ def test_target_roundtrip_default_schema() -> None:
 
 
 def test_target_parser_reports_group_errors() -> None:
-    schema = TargetSchema(blocks=default_target_blocks(max_dim=2))
+    schema = TargetSchema(blocks=all_target_blocks(max_dim=2))
     with pytest.raises(TargetParseError) as exc_info:
         parse_target_groups("1,4,1;1,3,1", schema)
     assert exc_info.value.expected == 5

@@ -1679,3 +1679,18 @@ input[type="range"] {
   min-width: 130px;
   margin-top: 0;
 }
+
+body.simple-mode .expert-only {
+  display: none !important;
+}
+
+#mode-toggle {
+  cursor: pointer;
+  font-family: var(--sans);
+}
+
+#mode-toggle.expert {
+  color: var(--cyan);
+  border-color: rgba(94, 234, 212, 0.3);
+  background: rgba(94, 234, 212, 0.07);
+}

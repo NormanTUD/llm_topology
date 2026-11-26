@@ -125,6 +125,11 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Config-, Dataset- und Run-Import/Export im Browser
 - [x] CUDA-/RAM-Hinweise in Health und Training-Estimates
 - [x] Slurm-Beispielskript
+- [x] Simple/Expert-Modus fuer unterschiedliche Rollen
+- [x] Default nur Betti-Zahlen, weitere Ziele nur im Expert-Modus
+- [x] Quick-Demo-Preset
+- [x] Rollen-Workflows getestet (Demo, Beginner, ML, Topologie, Research)
+- [x] Analyse-Fallback bei zu kleinem Val-Split
 
 ## Phase 2 - Interpretierbarkeit
 

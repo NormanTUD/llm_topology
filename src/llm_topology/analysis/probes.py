@@ -53,8 +53,11 @@ def collect_activations(
     limit: int,
 ) -> ActivationSet:
     selected = _inference_examples(examples, limit)
-    if len(selected) < 2:
-        raise AnalysisError("at least two inference examples are required for probes")
+    if not selected:
+        raise AnalysisError(
+            "Keine Inferenz-Beispiele fuer Probes gefunden. "
+            "Erhoehe n_val oder senke task_mix, damit mindestens ein Inferenz-Sample im Split liegt."
+        )
     rows: list[list[np.ndarray]] = []
     for example in selected:
         input_ids = torch.tensor([example.input_ids], dtype=torch.long, device=device)
@@ -249,8 +252,13 @@ def analyze_model(
     device = device or torch.device("cpu")
     model.to(device).eval()
     train_set = collect_activations(model, bundle.train, device=device, limit=spec.max_examples)
+    val_examples = _inference_examples(bundle.val, max(spec.max_examples // 2, 8))
+    if len(val_examples) < 2:
+        val_examples.extend(_inference_examples(bundle.test, max(spec.max_examples // 2, 8)))
+    if len(val_examples) < 2:
+        val_examples.extend(_inference_examples(bundle.train, max(spec.max_examples // 2, 8)))
     val_set = collect_activations(
-        model, bundle.val, device=device, limit=max(spec.max_examples // 2, 8)
+        model, val_examples, device=device, limit=max(spec.max_examples // 2, 8)
     )
     probe_results = []
     for layer_index, (x_train, x_val) in enumerate(

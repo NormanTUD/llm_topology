@@ -1,6 +1,19 @@
 import { loadUIState, saveUIState } from "./state.js";
 
 let currentView = "data";
+let uiMode = "simple";
+
+function applyMode(mode, { persist = true } = {}) {
+  uiMode = mode;
+  document.body.classList.toggle("simple-mode", mode === "simple");
+  const button = document.getElementById("mode-toggle");
+  if (button) {
+    button.textContent = mode === "simple" ? "Simple" : "Expert";
+    button.classList.toggle("expert", mode === "expert");
+    button.title = mode === "simple" ? "Switch to expert mode" : "Switch to simple mode";
+  }
+  if (persist) saveUIState({ uiMode: mode });
+}
 
 function setView(view, { persist = true, labTab = null } = {}) {
   currentView = view;
@@ -47,11 +60,15 @@ function bind() {
     const target = locationView();
     setView(target.view, { persist: false, labTab: target.labTab });
   });
+  document.getElementById("mode-toggle")?.addEventListener("click", () => {
+    applyMode(uiMode === "simple" ? "expert" : "simple");
+  });
 }
 
 async function boot() {
   bind();
   const state = await loadUIState();
+  applyMode(state.uiMode === "expert" ? "expert" : "simple", { persist: false });
   const fromLocation = locationView();
   if (fromLocation.view === "lab" || window.location.hash) {
     setView(fromLocation.view, { persist: false, labTab: fromLocation.labTab });

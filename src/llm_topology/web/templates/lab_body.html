@@ -8,7 +8,7 @@
         <span class="chip chip-mono" id="device-chip">cpu</span>
       </div>
 
-      <div class="lab-tabs">
+      <div class="lab-tabs expert-only">
         <button type="button" class="lab-tab active" data-tab="train">Train</button>
         <button type="button" class="lab-tab" data-tab="interpret">Probe</button>
       </div>
@@ -29,7 +29,7 @@
           <div class="dataset-meta" id="dataset-meta">No dataset selected. Build one in Data Studio first.</div>
         </details>
 
-        <details class="section">
+        <details class="section expert-only">
           <summary>Model <span class="summary-note">from scratch</span></summary>
           <div class="control-grid">
             <label class="control"><span>Layers</span><input type="number" id="n-layers" min="1" max="24" value="3"></label>
@@ -49,7 +49,7 @@
           </div>
         </details>
 
-        <details class="section">
+        <details class="section expert-only">
           <summary>Training <span class="summary-note">CPU friendly</span></summary>
           <div class="control-grid">
             <label class="control"><span>Epochs</span><input type="number" id="epochs" min="1" max="1000" value="6"></label>
@@ -71,7 +71,7 @@
 
       </div>
 
-      <div class="tab-pane" id="interpret-controls">
+      <div class="tab-pane expert-only" id="interpret-controls">
         <label class="control span-2">
           <span>Run</span>
           <select id="analysis-job"><option value="">No completed run</option></select>

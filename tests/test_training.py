@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from llm_topology.analysis.probes import analyze_checkpoint
-from llm_topology.config import FiltrationSpec
+from llm_topology.config import FiltrationSpec, TargetSchema, all_target_blocks
 from llm_topology.datasets import DatasetStore
 from llm_topology.model import train as train_module
 from llm_topology.model.config import (
@@ -94,7 +94,10 @@ def test_val_test_splits_and_modes() -> None:
 
 def test_manual_epsilon_is_encoded_in_inference_prompt() -> None:
     data = _spec().data.model_copy(
-        update={"filtration": FiltrationSpec(method="alpha", epsilon=0.5)}
+        update={
+            "filtration": FiltrationSpec(method="alpha", epsilon=0.5),
+            "target_schema": TargetSchema(blocks=all_target_blocks(max_dim=2)),
+        }
     )
     bundle = build_dataset(NumericTokenizer(), data)
     example = next(item for item in bundle.train if item.task == "infer")
@@ -113,7 +116,10 @@ def test_manual_epsilon_is_encoded_in_inference_prompt() -> None:
 
 def test_dataset_manual_filtration_is_preserved() -> None:
     data = _spec().data.model_copy(
-        update={"filtration": FiltrationSpec(method="alpha", epsilon=0.5)}
+        update={
+            "filtration": FiltrationSpec(method="alpha", epsilon=0.5),
+            "target_schema": TargetSchema(blocks=all_target_blocks(max_dim=2)),
+        }
     )
     bundle = build_dataset(NumericTokenizer(), data)
     for example in [*bundle.train, *bundle.val]:
@@ -131,6 +137,9 @@ def test_saved_dataset_roundtrip(tmp_path: Path) -> None:
 
 def test_training_target_order_matches_schema() -> None:
     spec = _spec()
+    spec.data = spec.data.model_copy(
+        update={"target_schema": TargetSchema(blocks=all_target_blocks(max_dim=2))}
+    )
     bundle = build_dataset(NumericTokenizer(), spec.data)
     example = next(item for item in bundle.train if item.task == "infer")
     assert [block.name for block in spec.data.target_schema.blocks] == [

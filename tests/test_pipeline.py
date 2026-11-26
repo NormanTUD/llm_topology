@@ -9,6 +9,7 @@ from llm_topology.config import (
     StructureKind,
     TargetBlock,
     TargetSchema,
+    all_target_blocks,
 )
 from llm_topology.pipeline import PipelineError, generate_dataset
 from llm_topology.tokenizer import DEFAULT_BOUNDARY
@@ -49,7 +50,15 @@ def test_custom_schema_and_max_dim() -> None:
 
 
 def test_target_group_order_is_fixed_and_visible() -> None:
-    response = generate_dataset(DatasetSpec(structure=StructureKind.TORUS, n_points=80, seed=1))
+    schema = TargetSchema(blocks=all_target_blocks(max_dim=2))
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.TORUS,
+            n_points=80,
+            seed=1,
+            target_schema=schema,
+        )
+    )
     names = [block.name for block in response.target_schema.blocks]
     assert names == ["betti", "ph", "genus", "n_components", "filtration"]
     assert response.target_groups[0] == [
@@ -145,6 +154,7 @@ def test_manual_filtration_epsilon_is_in_targets() -> None:
             structure=StructureKind.CIRCLE,
             n_points=120,
             filtration=FiltrationSpec(method=FiltrationMethod.ALPHA, epsilon=0.5),
+            target_schema=TargetSchema(blocks=all_target_blocks(max_dim=2)),
         )
     )
     assert response.persistence.epsilon == 0.5
@@ -152,7 +162,13 @@ def test_manual_filtration_epsilon_is_in_targets() -> None:
 
 
 def test_auto_filtration_epsilon_is_reported_in_targets() -> None:
-    response = generate_dataset(DatasetSpec(structure=StructureKind.CIRCLE, n_points=120))
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.CIRCLE,
+            n_points=120,
+            target_schema=TargetSchema(blocks=all_target_blocks(max_dim=2)),
+        )
+    )
     assert response.persistence.epsilon > 0
     assert response.target_groups[-1][2] == response.persistence.epsilon
 
