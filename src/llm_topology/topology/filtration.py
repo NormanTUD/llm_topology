@@ -60,7 +60,9 @@ def _alpha_diagrams(
 
     filtration_values = [float(value) for _, value in st.get_filtration()]
     max_filtration = max(filtration_values) if filtration_values else 0.0
-    max_epsilon = math.sqrt(max(max_filtration, 0.0))
+    bbox = float(np.linalg.norm(points.max(axis=0) - points.min(axis=0)))
+    raw_max_epsilon = math.sqrt(max(max_filtration, 0.0))
+    max_epsilon = max(min(raw_max_epsilon, 1.5 * max(bbox, 1e-9)), 1e-9)
 
     diagrams: list[list[tuple[float, float | None]]] = [[] for _ in range(max_dim + 1)]
     for dimension, (birth, death) in pairs:
@@ -103,6 +105,8 @@ def _rips_diagrams(
         threshold = float(np.quantile(upper, spec.rips_threshold_quantile))
         if threshold <= 0:
             threshold = float(np.max(upper)) if upper.size else 1.0
+    bbox = float(np.linalg.norm(points.max(axis=0) - points.min(axis=0)))
+    threshold = min(threshold, 1.5 * max(bbox, 1e-9))
     try:
         result = ripser(
             points,
@@ -181,34 +185,37 @@ def select_epsilon(
 ) -> float:
     if max_epsilon <= 0:
         return 0.0
-    candidates = _candidate_epsilon_values(diagrams, max_epsilon)
-    events = _event_values(diagrams, max_epsilon)
-    best_epsilon = 0.0
-    best_score = -1.0
-    best_margin = -1.0
-    for candidate in candidates:
-        score = 0.0
-        for dimension in range(1, len(diagrams)):
-            for birth, death in diagrams[dimension]:
-                if birth <= candidate and (death is None or candidate < death):
-                    if death is None:
-                        score += max(max_epsilon - birth, 0.0)
-                    else:
-                        score += max(death - birth, 0.0)
-        if score <= 0:
-            continue
-        position = int(np.searchsorted(events, candidate))
-        left = events[position - 1] if position > 0 else events[position]
-        right = events[position] if position < len(events) else events[-1]
-        margin = min(candidate - left, right - candidate)
-        if score > best_score + 1e-12 or (
-            abs(score - best_score) <= 1e-12 and margin > best_margin
-        ):
-            best_epsilon = float(candidate)
-            best_score = score
-            best_margin = margin
-    if best_score > 0:
-        return best_epsilon
+
+    lifetimes: list[tuple[int, float, float, float]] = []
+    for dimension in range(1, len(diagrams)):
+        for birth, death in diagrams[dimension]:
+            if death is None:
+                lifetime = max(max_epsilon - birth, 0.0)
+                midpoint = min(birth + lifetime / 2, max_epsilon)
+            else:
+                lifetime = max(death - birth, 0.0)
+                midpoint = (birth + death) / 2
+            if lifetime > 0:
+                lifetimes.append((dimension, lifetime, birth, midpoint))
+
+    if not lifetimes:
+        return float(0.5 * max_epsilon)
+
+    max_lifetime = max(item[1] for item in lifetimes)
+    significance = max(0.03 * max_lifetime, 1e-9)
+
+    for dimension in range(len(diagrams) - 1, 0, -1):
+        candidates = [
+            item for item in lifetimes
+            if item[0] == dimension and item[1] >= significance
+        ]
+        if candidates:
+            return float(max(candidates, key=lambda item: item[1])[3])
+
+    candidates = [item for item in lifetimes if item[1] >= significance]
+    if candidates:
+        return float(max(candidates, key=lambda item: item[1])[3])
+
     return float(0.5 * max_epsilon)
 
 
