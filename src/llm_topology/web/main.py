@@ -32,6 +32,7 @@ from ..experiment import ExperimentConfig, config_from_training_spec
 from ..limits import estimate_dataset, estimate_generation, estimate_training
 from ..model.config import AnalysisSpec, DataBuildSpec, ModelSpec, TrainConfig, TrainingSpec
 from ..pipeline import PipelineError, generate_dataset
+from ..preflight import system_snapshot
 from ..tokenizer import (
     DEFAULT_BOUNDARY,
     NumericTokenizer,
@@ -193,6 +194,7 @@ async def health() -> dict[str, object]:
     import numpy
     import torch
 
+    snapshot = system_snapshot()
     return {
         "status": "ok",
         "version": __version__,
@@ -203,6 +205,7 @@ async def health() -> dict[str, object]:
         "cuda": torch.cuda.is_available(),
         "mps": torch.backends.mps.is_available(),
         "phase": "Phase 1/2 - Model & Interpretability",
+        **snapshot,
     }
 
 

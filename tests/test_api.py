@@ -123,6 +123,37 @@ def test_ui_state_roundtrip() -> None:
     assert fetched.json()["test_marker"] == "ok"
 
 
+def test_dataset_zip_export_import(monkeypatch, tmp_path) -> None:
+    from llm_topology.web.main import DATASET_STORE
+
+    monkeypatch.setattr(DATASET_STORE, "root", tmp_path / "source")
+    payload = {
+        "name": "export-set",
+        "data_spec": {
+            "structures": ["circle"],
+            "n_train": 4,
+            "n_val": 2,
+            "n_test": 2,
+            "n_points": 8,
+            "max_seq_len": 512,
+            "precision": 5,
+            "augment": False,
+        },
+    }
+    created = client.post("/api/datasets", json=payload)
+    dataset_id = created.json()["id"]
+    exported = client.get(f"/api/datasets/{dataset_id}/export")
+    assert exported.status_code == 200
+    archive = exported.content
+    monkeypatch.setattr(DATASET_STORE, "root", tmp_path / "target")
+    imported = client.post(
+        "/api/datasets/import",
+        files={"file": ("dataset.zip", archive, "application/zip")},
+    )
+    assert imported.status_code == 200, imported.text
+    assert imported.json()["imported"] == dataset_id
+
+
 def test_dataset_api_roundtrip(monkeypatch, tmp_path) -> None:
     from llm_topology.web.main import DATASET_STORE
 
@@ -149,6 +180,37 @@ def test_dataset_api_roundtrip(monkeypatch, tmp_path) -> None:
     assert preview.status_code == 200
     assert preview.json()["split"] == "test"
     assert len(preview.json()["items"]) <= 2
+
+
+def test_config_export_import_endpoints() -> None:
+    spec = {
+        "data": {
+            "structures": ["circle"],
+            "n_train": 4,
+            "n_val": 2,
+            "n_test": 2,
+            "max_seq_len": 512,
+            "precision": 5,
+        },
+        "model": {
+            "max_seq_len": 512,
+            "n_layers": 1,
+            "n_heads": 2,
+            "d_model": 16,
+            "d_ff": 32,
+        },
+        "training": {"epochs": 1, "batch_size": 2, "device": "cpu"},
+    }
+    exported = client.post(
+        "/api/config/export",
+        json={"name": "api-config", "spec": spec},
+    )
+    assert exported.status_code == 200, exported.text
+    yaml_text = exported.json()["yaml"]
+    assert "api-config" in yaml_text
+    imported = client.post("/api/config/import", json={"yaml": yaml_text})
+    assert imported.status_code == 200
+    assert imported.json()["config"]["name"] == "api-config"
 
 
 def test_estimate_endpoints_and_training_guard() -> None:

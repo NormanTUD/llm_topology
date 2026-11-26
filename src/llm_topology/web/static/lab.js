@@ -1541,7 +1541,7 @@ async function boot() {
   bindEvents();
   try {
     const health = await fetchJSON("/api/health");
-    $("#health-chip").textContent = `torch ${health.torch}${health.cuda ? " · cuda" : ""}`;
+    $("#health-chip").textContent = `torch ${health.torch} · ${(health.ram_available_bytes/1024**3).toFixed(1)} GiB RAM · ${health.gpu ? "GPU" : "CPU"}`;
     if (health.cuda) {
       $("#device").value = "cuda";
     }

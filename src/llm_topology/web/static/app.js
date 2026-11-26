@@ -1058,7 +1058,7 @@ async function boot() {
   renderEquations();
   try {
     const health = await fetchJSON("/api/health");
-    $("#health-chip").textContent = `python ${health.python} · gudhi ${health.gudhi}`;
+    $("#health-chip").textContent = `py ${health.python} · ${(health.ram_available_bytes/1024**3).toFixed(1)} GiB RAM · ${health.gpu ? "GPU" : "CPU"}`;
   } catch (_error) {
     $("#health-chip").textContent = "offline";
   }

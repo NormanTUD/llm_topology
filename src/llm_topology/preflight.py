@@ -276,6 +276,15 @@ def collect_checks(
 
                 cfg = ExperimentConfig.from_file(path)
                 checks.append(Check("Config", "ok", f"{path.name}: {cfg.name}"))
+                if cfg.training.device == "cuda" and not _gpu_info()[0]:
+                    checks.append(
+                        Check(
+                            "Device",
+                            "error",
+                            "Config fordert CUDA, aber es ist keine CUDA-GPU/Torch-CUDA verfuegbar.",
+                            "Setze training.device: auto oder cpu, oder installiere CUDA-Torch.",
+                        )
+                    )
                 if cfg.dataset_id:
                     from .datasets import STORE
 
@@ -316,6 +325,20 @@ def collect_checks(
         )
 
     return checks
+
+
+def system_snapshot() -> dict[str, object]:
+    total, available = _meminfo()
+    has_gpu, gpu_names = _gpu_info()
+    return {
+        "platform": platform.platform(),
+        "python": platform.python_version(),
+        "cpus": os.cpu_count(),
+        "ram_total_bytes": total,
+        "ram_available_bytes": available,
+        "gpu": has_gpu,
+        "gpu_names": gpu_names,
+    }
 
 
 def render_checks(checks: list[Check], *, title: str = "Preflight") -> Console:

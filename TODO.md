@@ -7,7 +7,7 @@
 - **Phase 1:** abgeschlossen (Custom Transformer + Training)
 - **Phase 2:** abgeschlossen (Probes + Heatmaps + Latent-PCA)
 - **Status:** Browser-GUI mit Data Studio, Model Lab und Interpretability
-- **Letzter Testlauf:** 102 Tests bestanden, Ruff und Formatierung sauber
+- **Letzter Testlauf:** 105 Tests bestanden, Ruff und Formatierung sauber
 - **Naechster Meilenstein:** OOD-/Invarianzmatrix, Ablation, Activation Patching
 
 Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
@@ -119,6 +119,12 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Warnungen und Blockieren bei kritischen Settings
 - [x] Start/Stop-Action-Bar oben, Dataset-Preview unter dem Loss
 - [x] Top-Action-Bars in Data Studio und Interpretability
+- [x] YAML-Experiment-Configs + JSON-Export
+- [x] Headless-CLI mit Rich, run.log, metrics.jsonl, job.json
+- [x] Doctor/Preflight mit RAM, Disk, GPU, Port, Config und Fix-Hinweisen
+- [x] Config-, Dataset- und Run-Import/Export im Browser
+- [x] CUDA-/RAM-Hinweise in Health und Training-Estimates
+- [x] Slurm-Beispielskript
 
 ## Phase 2 - Interpretierbarkeit
 

@@ -135,6 +135,20 @@ def estimate_dataset(data_spec: DataBuildSpec) -> dict[str, Any]:
     }
 
 
+def device_memory(device: str) -> tuple[int, str]:
+    if device in {"auto", "cuda"}:
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                free, _total = torch.cuda.mem_get_info()
+                name = torch.cuda.get_device_name(0)
+                return int(free), f"GPU {name}"
+        except Exception:
+            pass
+    return available_memory_bytes(), "CPU RAM"
+
+
 def estimate_training(
     spec: TrainingSpec,
     *,
@@ -153,9 +167,20 @@ def estimate_training(
     params = model.n_layers * (12 * model.d_model**2 + 2 * model.d_model * model.d_ff)
     params += vocab * model.d_model * 2
     bytes_needed = (attention + activation + logits) * 4 + params * 16
-    available = available_memory_bytes()
+    available, memory_source = device_memory(spec.training.device)
     ratio = bytes_needed / max(available, 1)
     warnings: list[str] = []
+    cuda_unavailable = False
+    if spec.training.device == "cuda":
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                cuda_unavailable = True
+                warnings.append("CUDA ist konfiguriert, aber keine CUDA-GPU/Torch-CUDA verfuegbar.")
+        except Exception:
+            cuda_unavailable = True
+            warnings.append("CUDA ist konfiguriert, aber torch konnte nicht geprueft werden.")
     if dataset_meta and dataset_meta.get("max_seq_len", 0) > model.max_seq_len:
         warnings.append(
             f"Dataset-Kontext {dataset_meta['max_seq_len']} > Modell-Kontext {model.max_seq_len}."
@@ -169,9 +194,11 @@ def estimate_training(
     if ratio >= 0.55:
         warnings.append(
             f"Geschaetzter Trainingsbedarf ~{bytes_needed / 1024**2:.0f} MiB "
-            f"bei ~{available / 1024**2:.0f} MiB verfuegbar."
+            f"bei ~{available / 1024**2:.0f} MiB verfuegbar ({memory_source})."
         )
     level = _level(ratio)
+    if cuda_unavailable:
+        level = "block"
     if attention > 2_000_000_000:
         level = "block"
     if dataset_meta and dataset_meta.get("max_seq_len", 0) > model.max_seq_len:
@@ -187,5 +214,6 @@ def estimate_training(
             "parameters": params,
             "bytes": int(bytes_needed),
             "available_bytes": available,
+            "memory_source": memory_source,
         },
     }

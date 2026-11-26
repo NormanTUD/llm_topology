@@ -47,6 +47,8 @@ Alternativ:
 ```bash
 uv run app.py
 uv run app.py --no-browser --port 8000
+python3 app.py --doctor
+python3 app.py --config experiment.yaml --headless
 ```
 
 Danach:
@@ -108,6 +110,13 @@ Data Foundation:
   nicht passt,
 - serverseitige RAM-/VRAM-Plausibilitätschecks für Generierung, Dataset-Build
   und Training inklusive Warnungen und Blockieren bei kritischen Settings,
+- Startup-Doctor mit Python/uv/Paket/RAM/Disk/GPU/Port/Config-Prüfungen und
+  actionable Installations-/Fix-Hinweisen,
+- Headless-CLI mit Rich-Progress, `run.log`, `metrics.jsonl`, Checkpoints und
+  importierbarem `job.json`,
+- Config-Export/Import (YAML/JSON) sowie Run- und Dataset-ZIP-Export/Import
+  im Browser,
+- Slurm-Beispielskript unter `scripts/slurm_experiment.sbatch`,
 - Temml-Gleichungsansicht,
 - pytest-Suite und GitHub-Actions-CI.
 
@@ -152,7 +161,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **102 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **105 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
