@@ -53,6 +53,7 @@ def seed(base_url: str) -> str:
             "lastBatch": batch.json()["items"],
             "selected": 0,
             "appView": "data",
+            "uiMode": "simple",
             "targetBlocks": ["betti"],
             "batchMode": "single",
             "batchStructures": [],
@@ -92,6 +93,7 @@ def launch_chromium(base_url: str, profile: Path) -> subprocess.Popen:
         "--no-sandbox",
         "--disable-gpu",
         "--disable-dev-shm-usage",
+        "--enable-unsafe-swiftshader",
         "--disable-extensions",
         "--no-first-run",
         "--js-flags=--max-old-space-size=256",
@@ -179,6 +181,9 @@ async def run_gui(base_url: str, dataset_id: str) -> None:
     await send("Log.enable")
     await send("Page.enable")
     await asyncio.sleep(2)
+    await wait_for('document.querySelector("#data-view") ? "yes" : ""', 15)
+    await wait_for('document.body.classList.contains("simple-mode") ? "yes" : ""', 15)
+    await wait_for('document.querySelectorAll(".cloud-card").length > 0 ? "yes" : ""', 20)
 
     check("Data Studio visible", bool(await evaluate('!document.querySelector("#data-view").classList.contains("hidden")')))
     check("seeded gallery rendered", int(await evaluate('document.querySelectorAll(".cloud-card").length') or 0) > 0)
