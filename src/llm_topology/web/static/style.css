@@ -1591,3 +1591,18 @@ input[type="range"] {
   line-height: 1.6;
   word-break: break-word;
 }
+
+.dataset-preview-controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.dataset-preview-controls select {
+  width: auto;
+  min-width: 110px;
+  padding: 4px 22px 4px 7px;
+  font-size: 9px;
+}

@@ -24,6 +24,12 @@ function clampInt(value, min, max, fallback) {
   return Math.min(max, Math.max(min, parsed));
 }
 
+function optionalInt(id, min, max) {
+  const raw = document.getElementById(id)?.value?.trim();
+  if (!raw) return null;
+  return clampInt(raw, min, max, null);
+}
+
 function numberValue(name, fallback = 0) {
   const element = $(`[name="${name}"]`);
   if (!element) return fallback;
@@ -293,6 +299,7 @@ function buildSpec() {
   return {
     structure,
     n_points: clampInt($("#n-points").value, 4, 100000, 240),
+    points_per_component: optionalInt("points-per-component", 4, 2048),
     ambient_dim: clampInt($("#ambient-dim").value, 2, 64, 3),
     copies: clampInt($("#copies").value, 1, 1000, 1),
     genus: clampInt($("#genus").value, 1, 32, 2),
@@ -880,7 +887,9 @@ async function copyText(text, label) {
 }
 
 function updateDatasetBudget() {
-  const points = clampInt($("#dataset-n-points")?.value, 8, 512, 32);
+  const copies = clampInt($("#copies")?.value, 1, 1000, 1);
+  const per = optionalInt("dataset-points-per-component", 8, 2048);
+  const points = per ? per * copies : clampInt($("#dataset-n-points")?.value, 8, 4096, 32);
   const ambient = clampInt($("#ambient-dim")?.value, 2, 64, 3);
   const precision = clampInt($("#dataset-precision")?.value, 1, 8, 3);
   const context = clampInt($("#dataset-context")?.value, 64, 32768, 1024);
@@ -914,7 +923,7 @@ async function buildTrainingDataset() {
   try {
     const base = buildSpec();
     updateDatasetBudget();
-    const estimated = clampInt($("#dataset-n-points").value, 8, 512, 32) *
+    const estimated = totalPoints *
       base.ambient_dim * (clampInt($("#dataset-precision").value, 1, 8, 3) + 3) + 96;
     if (estimated > clampInt($("#dataset-context").value, 64, 32768, 1024)) {
       throw new Error("Dataset token budget exceeds context. Increase context or reduce points/precision.");
@@ -926,11 +935,17 @@ async function buildTrainingDataset() {
       throw new Error("No compatible structure selected for this dataset.");
     }
     const filtration = { ...base.filtration };
+    const perComponent = optionalInt("dataset-points-per-component", 8, 2048);
+    const totalPoints = perComponent
+      ? perComponent * base.copies
+      : clampInt($("#dataset-n-points").value, 8, 4096, 32);
     const dataSpec = {
       structures,
       n_train: clampInt($("#dataset-n-train").value, 4, 5000, 48),
       n_val: clampInt($("#dataset-n-val").value, 2, 1000, 16),
-      n_points: clampInt($("#dataset-n-points").value, 8, 512, 32),
+      n_test: clampInt($("#dataset-n-test").value, 2, 1000, 8),
+      n_points: totalPoints,
+      points_per_component: perComponent,
       ambient_dim: base.ambient_dim,
       copies: base.copies,
       genus: base.genus,
@@ -939,8 +954,10 @@ async function buildTrainingDataset() {
       task_mix: Math.max(0, Math.min(1, numberValue("dataset-task-mix", 0.5))),
       augment: $("#dataset-augment").checked,
       augment_strength: Math.max(0, Math.min(1, numberValue("dataset-augment-strength", 0.35))),
-      val_augment: $("#dataset-val-augment").checked,
+      val_transform_mode: $("#dataset-val-transform-mode").value,
+      test_transform_mode: $("#dataset-test-transform-mode").value,
       val_augment_strength: Math.max(0, Math.min(1, numberValue("dataset-val-augment-strength", 0.35))),
+      test_augment_strength: Math.max(0, Math.min(1, numberValue("dataset-test-augment-strength", 0.35))),
       seed: base.seed,
       filtration,
       target_schema: base.target_schema,
@@ -1051,6 +1068,8 @@ async function boot() {
   });
   $("#ambient-dim").addEventListener("input", updateDatasetBudget);
   $("#ambient-dim").addEventListener("change", updateDatasetBudget);
+  $("#copies").addEventListener("input", updateDatasetBudget);
+  $("#copies").addEventListener("change", updateDatasetBudget);
   $("#batch-structure-checks").addEventListener("change", onControlChange);
   $("#build-dataset").addEventListener("click", buildTrainingDataset);
   if (saved.lastBatch && Array.isArray(saved.lastBatch) && saved.lastBatch.length) {

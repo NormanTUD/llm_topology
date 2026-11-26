@@ -76,6 +76,11 @@
           </label>
 
           <label class="control">
+            <span>Points per component</span>
+            <input type="number" name="points_per_component" id="points-per-component" min="4" max="2048" step="1" placeholder="total only">
+          </label>
+
+          <label class="control">
             <span>Genus</span>
             <input type="number" name="genus" id="genus" min="1" max="32" step="1" value="2">
           </label>
@@ -224,14 +229,18 @@
           <label class="control"><span>Name</span><input type="text" id="dataset-name" value="topology-set"></label>
           <label class="control"><span>Train samples</span><input type="number" id="dataset-n-train" min="4" max="5000" value="48"></label>
           <label class="control"><span>Val samples</span><input type="number" id="dataset-n-val" min="2" max="1000" value="16"></label>
-          <label class="control"><span>Points</span><input type="number" id="dataset-n-points" min="8" max="512" value="32"></label>
+          <label class="control"><span>Test samples</span><input type="number" id="dataset-n-test" min="2" max="1000" value="8"></label>
+          <label class="control"><span>Points total</span><input type="number" id="dataset-n-points" min="8" max="4096" value="32"></label>
+          <label class="control"><span>Points per component</span><input type="number" id="dataset-points-per-component" min="8" max="2048" placeholder="optional"></label>
           <label class="control"><span>Context</span><input type="number" id="dataset-context" min="64" max="32768" value="1024"></label>
           <label class="control"><span>Precision</span><input type="number" id="dataset-precision" min="1" max="8" value="3"></label>
           <label class="control"><span>Task mix</span><input type="number" id="dataset-task-mix" min="0" max="1" step="0.05" value="0.5"></label>
           <label class="control"><span>Train augment strength</span><input type="number" id="dataset-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
           <label class="control"><span>Val augment strength</span><input type="number" id="dataset-val-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
+          <label class="control"><span>Test augment strength</span><input type="number" id="dataset-test-augment-strength" min="0" max="1" step="0.05" value="0.35"></label>
+          <label class="control"><span>Val transforms</span><select id="dataset-val-transform-mode"><option value="clean">clean</option><option value="same" selected>same</option><option value="heldout">heldout</option></select></label>
+          <label class="control"><span>Test transforms</span><select id="dataset-test-transform-mode"><option value="clean">clean</option><option value="same">same</option><option value="heldout" selected>heldout</option></select></label>
           <label class="control checkbox"><input type="checkbox" id="dataset-augment" checked><span>Train transforms</span></label>
-          <label class="control checkbox"><input type="checkbox" id="dataset-val-augment" checked><span>Val transforms</span></label>
           <button type="button" class="primary" id="build-dataset">
             <span class="btn-spinner" aria-hidden="true"></span>
             <span class="btn-label">Build & save dataset</span>

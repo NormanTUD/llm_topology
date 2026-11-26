@@ -87,7 +87,9 @@ class DataBuildSpec(BaseModel):
     )
     n_train: int = Field(default=64, ge=4, le=5000)
     n_val: int = Field(default=24, ge=2, le=1000)
-    n_points: int = Field(default=32, ge=8, le=512)
+    n_test: int = Field(default=8, ge=2, le=1000)
+    n_points: int = Field(default=32, ge=8, le=4096)
+    points_per_component: int | None = Field(default=None, ge=8, le=2048)
     ambient_dim: int = Field(default=3, ge=2, le=12)
     copies: int = Field(default=1, ge=1, le=32)
     genus: int = Field(default=2, ge=1, le=16)
@@ -96,8 +98,10 @@ class DataBuildSpec(BaseModel):
     task_mix: float = Field(default=0.5, ge=0, le=1)
     augment: bool = True
     augment_strength: float = Field(default=0.35, ge=0, le=1)
-    val_augment: bool = True
+    val_transform_mode: str = Field(default="same", pattern="^(clean|same|heldout)$")
+    test_transform_mode: str = Field(default="heldout", pattern="^(clean|same|heldout)$")
     val_augment_strength: float = Field(default=0.35, ge=0, le=1)
+    test_augment_strength: float = Field(default=0.35, ge=0, le=1)
     seed: int = 0
     filtration: FiltrationSpec = Field(default_factory=FiltrationSpec)
     target_schema: TargetSchema = Field(default_factory=TargetSchema)

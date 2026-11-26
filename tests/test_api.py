@@ -143,7 +143,12 @@ def test_dataset_api_roundtrip(monkeypatch, tmp_path) -> None:
     assert response.status_code == 200, response.text
     meta = response.json()
     assert meta["train_count"] == 4
+    assert meta["test_count"] >= 2
     assert any(item["id"] == meta["id"] for item in client.get("/api/datasets").json())
+    preview = client.get(f"/api/datasets/{meta['id']}/preview?split=test&limit=2")
+    assert preview.status_code == 200
+    assert preview.json()["split"] == "test"
+    assert len(preview.json()["items"]) <= 2
 
 
 def test_training_routes_report_errors() -> None:

@@ -70,9 +70,32 @@ def test_augmented_dataset_build_does_not_crash() -> None:
     assert len(bundle.val) == data.n_val
 
 
-def test_validation_augmentation_changes_val_clouds() -> None:
-    clean = _spec().data.model_copy(update={"augment": False, "val_augment": False})
-    rotated = clean.model_copy(update={"val_augment": True, "val_augment_strength": 0.45})
+def test_val_test_splits_and_modes() -> None:
+    data = _spec().data.model_copy(
+        update={
+            "n_test": 3,
+            "val_transform_mode": "clean",
+            "test_transform_mode": "heldout",
+        }
+    )
+    bundle = build_dataset(NumericTokenizer(), data)
+    assert len(bundle.test) == 3
+    assert bundle.val[0].transform.get("rotation_deg") in (None, [0, 0, 0], (0, 0, 0))
+    assert bundle.test[0].transform.get("twist") is not None
+
+
+def test_manual_epsilon_is_encoded_in_inference_prompt() -> None:
+    data = _spec().data.model_copy(
+        update={"filtration": FiltrationSpec(method="alpha", epsilon=0.5)}
+    )
+    bundle = build_dataset(NumericTokenizer(), data)
+    example = next(item for item in bundle.train if item.task == "infer")
+    epsilon_id = bundle.tokenizer.token_to_id["<epsilon>"]
+    assert epsilon_id in example.input_ids
+    assert example.target_groups[-1][2] == 0.5
+
+    clean = _spec().data.model_copy(update={"augment": False, "val_transform_mode": "clean"})
+    rotated = clean.model_copy(update={"val_transform_mode": "same", "val_augment_strength": 0.45})
     clean_bundle = build_dataset(NumericTokenizer(), clean)
     rotated_bundle = build_dataset(NumericTokenizer(), rotated)
     assert len(clean_bundle.val) == len(rotated_bundle.val)
@@ -136,6 +159,7 @@ def test_training_saves_checkpoint_and_history(trained_run) -> None:
     assert (directory / "run" / "history.json").exists()
     assert "val_loss" in result.history[0]
     assert "samples" in result.history[0]
+    assert "test_loss" in result.history[0]
 
 
 def test_analysis_from_checkpoint(trained_run) -> None:

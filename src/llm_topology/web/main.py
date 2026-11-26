@@ -301,6 +301,20 @@ async def create_dataset(payload: DatasetCreateRequest) -> dict[str, object]:
         raise HTTPException(status_code=422, detail=f"{type(exc).__name__}: {exc}") from exc
 
 
+@app.get("/api/datasets/{dataset_id}/preview")
+async def preview_dataset(
+    dataset_id: str,
+    split: str = "train",
+    limit: int = 6,
+) -> dict[str, object]:
+    if split not in {"train", "val", "test"}:
+        raise HTTPException(status_code=422, detail="split must be train, val or test")
+    try:
+        return DATASET_STORE.preview(dataset_id, split=split, limit=min(max(limit, 1), 24))
+    except DatasetStoreError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.get("/api/datasets/{dataset_id}")
 async def get_dataset(dataset_id: str) -> dict[str, object]:
     try:

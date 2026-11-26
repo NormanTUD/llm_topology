@@ -274,10 +274,12 @@ class Trainer:
         return F.relu(margin - (correct_selected - neg_logp)).mean()
 
     @torch.no_grad()
-    def _evaluate(self) -> dict[str, float]:
+    def _evaluate_examples(self, examples, prefix: str) -> dict[str, float]:
+        if not examples:
+            return {}
         self.model.eval()
         loader = DataLoader(
-            TokenDataset(self.bundle.val),
+            TokenDataset(examples),
             batch_size=self.spec.training.batch_size,
             shuffle=False,
             collate_fn=partial(collate_examples, pad_id=self.pad_id),
@@ -305,14 +307,17 @@ class Trainer:
             total_mc += mc[1]
         self.model.train()
         metrics = {
-            "val_loss": total_loss / max(1, batches),
-            "val_ce": total_ce / max(1, batches),
-            "val_token_accuracy": total_acc / max(1, batches),
-            "val_aux_loss": total_aux / max(1, batches),
+            f"{prefix}_loss": total_loss / max(1, batches),
+            f"{prefix}_ce": total_ce / max(1, batches),
+            f"{prefix}_token_accuracy": total_acc / max(1, batches),
+            f"{prefix}_aux_loss": total_aux / max(1, batches),
         }
         if total_mc:
-            metrics["val_multiple_choice"] = correct_mc / total_mc
+            metrics[f"{prefix}_multiple_choice"] = correct_mc / total_mc
         return metrics
+
+    def _evaluate(self) -> dict[str, float]:
+        return self._evaluate_examples(self.bundle.val, "val")
 
     @torch.no_grad()
     def _multiple_choice_batch(
@@ -578,13 +583,17 @@ class Trainer:
                 "lr": scheduler.get_last_lr()[0],
             }
             val_metrics = self._evaluate()
+            test_metrics = self._evaluate_examples(self.bundle.test, "test")
             print(f"{tag} validation {val_metrics}", flush=True)
+            if test_metrics:
+                print(f"{tag} test {test_metrics}", flush=True)
             samples = self._sample_generation()
             prediction_samples = self._prediction_samples()
             self.samples = samples
             metrics = {
                 **train_metrics,
                 **val_metrics,
+                **test_metrics,
                 "samples": samples,
                 "prediction_samples": prediction_samples,
             }

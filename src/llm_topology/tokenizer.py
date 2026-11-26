@@ -11,6 +11,7 @@ SPECIAL_TOKENS: tuple[str, ...] = (
     "<bos>",
     "<eos>",
     "<endoftext>",
+    "<epsilon>",
     "<infer>",
     "<generate>",
     "<unk>",

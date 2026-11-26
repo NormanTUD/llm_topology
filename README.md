@@ -63,8 +63,8 @@ Workflow:
 1. Im Data Studio Punktwolken generieren und die Rezeptur prüfen.
 2. Unten im Data Studio `Build & save dataset` ausführen. Das erzeugt
    `datasets/ds-NNNN/` mit Train-/Val-Beispielen.
-3. Im Model Lab das gespeicherte Dataset auswählen und trainieren. Die
-   Validierungswolken können im Dataset Builder separat transformiert werden.
+3. Im Model Lab das gespeicherte Dataset auswählen und trainieren. Val- und
+   Test-Split können im Dataset Builder getrennt transformiert werden.
 4. Während des Trainings Live-Loss, Validierungspaare und Vorhersagen sehen.
 5. Nach dem Training `Run probes & maps` oder frische Multi-Cloud-Predictions
    starten.
@@ -95,8 +95,13 @@ Data Foundation:
 - Batch-Modus `single` oder `mix` mit expliziter Strukturauswahl,
 - Live-Update der Geometrie bei Regleränderungen,
 - Trainingsdatensatz-Erzeugung nach `datasets/ds-NNNN/`,
-- getrennte Train-/Val-Augmentierung: auch Validierungswolken können
-  rotiert, gestreckt, getwistet, gebogen und gewarpt werden,
+- getrennte Train-/Val-/Test-Augmentierung mit `clean`, `same`, `heldout`,
+- Test-Split und Test-Metriken nach dem Training,
+- Dataset-Preview pro Split mit Punktwolken, Tokenlängen, Zielen und
+  tatsächlich angewendeter Transformation,
+- Punkte pro Komponente (z.B. 10 Tori mit je 400 Punkten) zusätzlich zur
+  Gesamtpunktzahl,
+- Epsilon als Input-Token im manuellen Modus plus Auto-Modus,
 - Temml-Gleichungsansicht,
 - pytest-Suite und GitHub-Actions-CI.
 
@@ -138,7 +143,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **91 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **93 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -343,8 +348,9 @@ jederzeit manuelles `epsilon`.
 gewählt oder explizit gesetzt werden. Der Dataset Builder übernimmt diese
 Wahl. Bei `auto` variiert epsilon pro Punktwolke; das Modell muss den Wert
 als Teil der `filtration`-Zielgruppe mitlernen. Bei manuellem epsilon ist der
-Wert für den Datensatz fixiert. Die Trainings- und Prediction-Ansichten
-zeigen wahres und vorhergesagtes epsilon nebeneinander.
+Wert für den Datensatz fixiert und wird zusätzlich als `<epsilon>…;`-Präfix
+in den Prompt gegeben. Die Trainings- und Prediction-Ansichten zeigen wahres
+und vorhergesagtes epsilon nebeneinander.
 
 **Koeffizienten:** Z2 ist der Default. Z3 dient als Q-ähnlicher
 Vergleichskörper, ist aber **keine exakte Q-Berechnung**. Für orientierbare
@@ -380,7 +386,9 @@ Default für CPU: 3 Layer, 4 Heads, `d_model=96`, FFN 384, Kontext 1024,
 32 Punkte, 3 Nachkommastellen. Das ist bewusst klein und schnell genug für
 interaktive Läufe. Alle Werte sind im Model Lab änderbar. Trainiert wird mit
 konfigurierbarer Batch-Größe; N Punktwolken werden also gleichzeitig als
-Batch verarbeitet, nicht als eine einzige Riesensequenz.
+Batch verarbeitet, nicht als eine einzige Riesensequenz. Bei mehreren
+Komponenten kann `Points per component` gesetzt werden; die Gesamtzahl ist
+dann `points_per_component * copies`.
 
 Die bedingte Punktwolkengenerierung ist als reine Sequenzgenerierung mit
 Task-Token umgesetzt. Ein separater Decoder-Kopf bleibt eine spätere
@@ -428,7 +436,7 @@ serverseitig gespeichert und nach F5 wiederhergestellt.
    - Strukturkatalog, Transformationen inklusive Shear/Bend/Warp,
    - kanonische Referenzwolke als Ghost-Overlay (nicht im Modell-Input),
    - Topology Guard: theoretische vs. berechnete Betti-Zahlen,
-   - Trainingsdatensatz-Erzeugung,
+   - Trainingsdatensatz-Erzeugung mit getrennten Train-/Val-/Test-Splits,
    - Filtration und Zielgruppen mit Auto- oder manuellem Epsilon,
    - 3D-Punktwolke, Persistenzdiagramm mit Referenz-Betti, Betti-Kurven,
    - theoretische vs. berechnete Betti-Zahlen,
@@ -437,6 +445,7 @@ serverseitig gespeichert und nach F5 wiederhergestellt.
 
 2. **Model Lab**
    - Auswahl eines gespeicherten Datasets,
+   - Dataset-Preview pro Split inklusive Transformationszusammenfassung,
    - Modell- und Trainingsregler,
    - Start/Stop-Toggle, Live-Batch-Loss, Validierungsmetriken,
    - Live-Paare aus Inputwolke, wahrem Ziel und Modellvorhersage,

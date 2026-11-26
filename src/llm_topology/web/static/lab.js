@@ -564,9 +564,11 @@ function renderValMetrics(job) {
   const rows = [
     ["val loss", current.val_loss],
     ["val CE", current.val_ce],
-    ["token accuracy", current.val_token_accuracy],
-    ["multiple choice", current.val_multiple_choice],
-    ["aux loss", current.val_aux_loss],
+    ["val token accuracy", current.val_token_accuracy],
+    ["val multiple choice", current.val_multiple_choice],
+    ["test loss", current.test_loss],
+    ["test token accuracy", current.test_token_accuracy],
+    ["test multiple choice", current.test_multiple_choice],
     ["train loss", current.train_loss],
   ];
   const container = $("#val-metrics");
@@ -1031,7 +1033,10 @@ async function runFreshPredictions() {
       transform: freshTransform(seed, distort),
       filtration: {
         ...labState.catalog.data_defaults.filtration,
-        epsilon: null,
+        epsilon:
+          $("#fresh-filtration-mode").value === "manual"
+            ? Math.max(0, numberValue("fresh-epsilon", 0.5))
+            : null,
         max_edge_length: null,
       },
       target_schema: labState.catalog.data_defaults.target_schema,
@@ -1139,6 +1144,7 @@ async function loadDatasets(preferredId = null) {
   select.value = chosen;
   labState.datasetId = chosen;
   updateDatasetMeta();
+  previewDataset();
 }
 
 function updateDatasetMeta() {
@@ -1148,12 +1154,63 @@ function updateDatasetMeta() {
     meta.textContent = "No dataset selected.";
     return;
   }
-  const valAugment = dataset.data_spec?.val_augment ? "val transforms" : "clean val";
-  meta.textContent = `${dataset.name} · ${dataset.id} · train ${dataset.train_count} / val ${dataset.val_count} · ${dataset.structures.join(", ")} · max_dim ${dataset.max_dim} · context ${dataset.max_seq_len} · ${valAugment}`;
+  const valMode = dataset.data_spec?.val_transform_mode || "clean";
+  const testMode = dataset.data_spec?.test_transform_mode || "clean";
+  meta.textContent = `${dataset.name} · ${dataset.id} · train ${dataset.train_count} / val ${dataset.val_count} / test ${dataset.test_count ?? "?"} · ${dataset.structures.join(", ")} · max_dim ${dataset.max_dim} · context ${dataset.max_seq_len} · val ${valMode} / test ${testMode}`;
   if (dataset.max_seq_len > intValue("context-train", 64, 32768, 1024)) {
     setValue("context-train", dataset.max_seq_len);
   }
   persistLabState();
+}
+
+async function previewDataset() {
+  if (!labState.datasetId) {
+    toast("Select a dataset first", true);
+    return;
+  }
+  const split = $("#dataset-preview-split").value;
+  const container = $("#dataset-preview");
+  container.innerHTML = '<span class="muted">Loading split…</span>';
+  try {
+    const data = await fetchJSON(`/api/datasets/${labState.datasetId}/preview?split=${split}&limit=12`);
+    container.innerHTML = "";
+    for (const item of data.items) {
+      const card = document.createElement("div");
+      card.className = "prediction-card";
+      const head = document.createElement("div");
+      head.className = "prediction-head";
+      const name = document.createElement("strong");
+      name.textContent = `${item.structure_name} · ${item.task}`;
+      const length = document.createElement("span");
+      length.textContent = `${item.seq_len} tokens`;
+      head.appendChild(name);
+      head.appendChild(length);
+      card.appendChild(head);
+      if (item.projection?.length) {
+        const mini = document.createElement("div");
+        mini.className = "prediction-mini";
+        card.appendChild(mini);
+        window.requestAnimationFrame(() => plotMiniPoints(mini, item.projection));
+      }
+      const values = document.createElement("div");
+      values.className = "prediction-values";
+      const transform = document.createElement("div");
+      transform.className = "prediction-condition";
+      transform.textContent = `transform: ${item.transform_summary}`;
+      values.appendChild(transform);
+      const target = document.createElement("div");
+      target.className = "prediction-condition";
+      target.textContent = `target: ${item.target_text}`;
+      values.appendChild(target);
+      card.appendChild(values);
+      container.appendChild(card);
+    }
+    if (!data.items.length) container.innerHTML = '<span class="muted">Split is empty.</span>';
+    toast(`Preview ${split}: ${data.total} examples`);
+  } catch (error) {
+    container.innerHTML = `<span class="muted">${error.message}</span>`;
+    toast(error.message, true);
+  }
 }
 
 function setTab(tab) {
@@ -1173,7 +1230,9 @@ function bindEvents() {
   $("#dataset-select").addEventListener("change", () => {
     labState.datasetId = $("#dataset-select").value || null;
     updateDatasetMeta();
+    previewDataset();
   });
+  $("#preview-dataset").addEventListener("click", previewDataset);
   $("#go-data-studio").addEventListener("click", () => {
     document.querySelector("#nav-data")?.click();
     document.querySelector("#dataset-builder")?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1189,6 +1248,10 @@ function bindEvents() {
   $(".fresh-controls").addEventListener("input", persistLabState);
   $(".fresh-controls").addEventListener("change", persistLabState);
   $("#run-predictions").addEventListener("click", runFreshPredictions);
+  $("#fresh-filtration-mode").addEventListener("change", () => {
+    $("#fresh-epsilon").disabled = $("#fresh-filtration-mode").value !== "manual";
+    persistLabState();
+  });
   $$(".lab-tab").forEach((button) => {
     button.addEventListener("click", () => setTab(button.dataset.tab));
   });
@@ -1227,6 +1290,7 @@ async function boot() {
     if (saved.labTab) setTab(saved.labTab);
     applyById(saved.labForm || {});
     applyById(saved.freshForm || {});
+    $("#fresh-epsilon").disabled = $("#fresh-filtration-mode").value !== "manual";
     await loadDatasets(saved.datasetId);
     await refreshRuns();
     if (saved.jobId) {

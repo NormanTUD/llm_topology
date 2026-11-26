@@ -8,6 +8,7 @@ from typing import Any
 
 from .model.config import DataBuildSpec
 from .model.data import DatasetBundle, TokenExample, build_dataset
+from .pipeline import project_for_display
 from .tokenizer import NumericTokenizer
 
 
@@ -40,6 +41,7 @@ class DatasetStore:
             "created_at": time.time(),
             "train_count": len(bundle.train),
             "val_count": len(bundle.val),
+            "test_count": len(bundle.test),
             "skipped": bundle.skipped,
             "max_dim": bundle.max_dim,
             "max_seq_len": data_spec.max_seq_len,
@@ -52,12 +54,13 @@ class DatasetStore:
         data = {
             "train": [asdict(example) for example in bundle.train],
             "val": [asdict(example) for example in bundle.val],
+            "test": [asdict(example) for example in bundle.test],
         }
         (directory / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         (directory / "data.json").write_text(json.dumps(data), encoding="utf-8")
         print(
             f"[datasets] saved {dataset_id} name={meta['name']!r} "
-            f"train={meta['train_count']} val={meta['val_count']}",
+            f"train={meta['train_count']} val={meta['val_count']} test={meta['test_count']}",
             flush=True,
         )
         return meta
@@ -79,6 +82,34 @@ class DatasetStore:
             raise DatasetStoreError(f"unknown dataset: {dataset_id}")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    def preview(self, dataset_id: str, split: str = "train", limit: int = 6) -> dict[str, Any]:
+        bundle = self.load(dataset_id)
+        examples = getattr(bundle, split)
+        items = []
+        for example in examples[:limit]:
+            projection, _ = project_for_display(example.points)
+            transform = example.transform or {}
+            summary_parts = []
+            for key in ("rotation_deg", "stretch", "twist", "shear", "bend", "warp", "noise"):
+                value = transform.get(key)
+                if value in (None, 0, 0.0, (0, 0, 0), [0, 0, 0], (1, 1, 1), [1, 1, 1]):
+                    continue
+                summary_parts.append(f"{key}={value}")
+            items.append(
+                {
+                    "structure_name": example.structure_name,
+                    "task": example.task,
+                    "seq_len": example.seq_len,
+                    "projection": projection,
+                    "points": example.points,
+                    "true_groups": example.target_groups,
+                    "target_text": example.target_text,
+                    "transform": transform,
+                    "transform_summary": ", ".join(summary_parts) or "clean",
+                }
+            )
+        return {"dataset_id": dataset_id, "split": split, "total": len(examples), "items": items}
+
     def load(self, dataset_id: str) -> DatasetBundle:
         directory = self.root / dataset_id
         meta_path = directory / "meta.json"
@@ -88,11 +119,18 @@ class DatasetStore:
         meta = json.loads(meta_path.read_text(encoding="utf-8"))
         data = json.loads(data_path.read_text(encoding="utf-8"))
         data_spec = DataBuildSpec.model_validate(meta["data_spec"])
-        train = [TokenExample(**item) for item in data.get("train", [])]
-        val = [TokenExample(**item) for item in data.get("val", [])]
+
+        def _example(item: dict[str, Any]) -> TokenExample:
+            item.setdefault("transform", {})
+            return TokenExample(**item)
+
+        train = [_example(item) for item in data.get("train", [])]
+        val = [_example(item) for item in data.get("val", [])]
+        test = [_example(item) for item in data.get("test", [])]
         return DatasetBundle(
             train=train,
             val=val,
+            test=test,
             tokenizer=NumericTokenizer(),
             data_spec=data_spec,
             max_dim=int(meta["max_dim"]),

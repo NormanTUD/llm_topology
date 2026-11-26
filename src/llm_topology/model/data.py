@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import torch
@@ -8,7 +9,7 @@ from torch.utils.data import Dataset
 
 from ..config import DatasetSpec, StructureKind, TransformSpec
 from ..pipeline import PipelineError, generate_dataset
-from ..tokenizer import DEFAULT_BOUNDARY, NumericTokenizer, serialize_points
+from ..tokenizer import DEFAULT_BOUNDARY, NumericTokenizer, format_number, serialize_points
 from .config import DataBuildSpec
 
 
@@ -34,6 +35,7 @@ class TokenExample:
     target_text: str
     target_groups: list[list[float]]
     seq_len: int
+    transform: dict[str, Any] = field(default_factory=dict)
 
     def aux_targets(self, max_dim: int) -> dict[str, float | int | list[float]]:
         return {
@@ -49,6 +51,7 @@ class TokenExample:
 class DatasetBundle:
     train: list[TokenExample]
     val: list[TokenExample]
+    test: list[TokenExample]
     tokenizer: NumericTokenizer
     data_spec: DataBuildSpec
     max_dim: int
@@ -59,6 +62,21 @@ class DatasetBundle:
 def _pad(values: list[float], size: int) -> list[float]:
     values = list(values[:size])
     return values + [0.0] * (size - len(values))
+
+
+def _heldout_transform(seed: int, strength: float) -> TransformSpec:
+    rng = np.random.default_rng(seed)
+    return TransformSpec(
+        rotation_deg=(0.0, 0.0, 0.0),
+        stretch=(1.0, 1.0, 1.0),
+        twist=float(rng.uniform(-0.9, 0.9) * strength),
+        shear=tuple((rng.uniform(-0.6, 0.6, size=3) * strength).tolist()),
+        bend=float(rng.uniform(-0.8, 0.8) * strength),
+        warp=float(rng.uniform(-0.7, 0.7) * strength),
+        noise=0.0,
+        permute=True,
+        seed=seed + 13,
+    )
 
 
 def _random_transform(seed: int, strength: float) -> TransformSpec:
@@ -78,19 +96,28 @@ def _random_transform(seed: int, strength: float) -> TransformSpec:
     )
 
 
+def _transform_for_mode(seed: int, mode: str, strength: float) -> TransformSpec:
+    if mode == "clean" or strength <= 0:
+        return TransformSpec(seed=seed)
+    if mode == "heldout":
+        return _heldout_transform(seed, strength)
+    return _random_transform(seed, strength)
+
+
 def _make_spec(
     data_spec: DataBuildSpec,
     structure: StructureKind,
     index: int,
     *,
-    augment: bool,
+    mode: str,
     strength: float,
 ) -> DatasetSpec:
     seed = data_spec.seed + index
-    transform_spec = _random_transform(seed, strength) if augment else TransformSpec(seed=seed)
+    transform_spec = _transform_for_mode(seed, mode, strength)
     return DatasetSpec(
         structure=structure,
         n_points=data_spec.n_points,
+        points_per_component=data_spec.points_per_component,
         ambient_dim=data_spec.ambient_dim,
         copies=data_spec.copies,
         genus=data_spec.genus,
@@ -116,8 +143,16 @@ def _make_example(
     eot_id = tokenizer.token_to_id[DEFAULT_BOUNDARY]
     eos_id = tokenizer.eos_id
 
+    epsilon_ids: list[int] = []
+    if data_spec.filtration.epsilon is not None:
+        epsilon_ids = [
+            tokenizer.token_to_id["<epsilon>"],
+            *tokenizer.encode(format_number(response.persistence.epsilon)),
+            tokenizer.token_to_id[";"],
+        ]
+
     if task == "infer":
-        prefix_ids = [tokenizer.token_to_id["<infer>"], *point_ids, eot_id]
+        prefix_ids = [tokenizer.token_to_id["<infer>"], *epsilon_ids, *point_ids, eot_id]
         answer_ids = [*target_ids, eos_id]
     else:
         prefix_ids = [tokenizer.token_to_id["<generate>"], *target_ids, eot_id]
@@ -149,6 +184,7 @@ def _make_example(
         target_text=target_text,
         target_groups=response.target_groups,
         seq_len=len(input_ids),
+        transform=dict(response.sample.metadata.get("transform", {})),
     )
 
 
@@ -157,7 +193,7 @@ def _build_split(
     data_spec: DataBuildSpec,
     count: int,
     *,
-    augment: bool,
+    mode: str,
     strength: float,
     start_index: int,
 ) -> tuple[list[TokenExample], int]:
@@ -169,7 +205,7 @@ def _build_split(
         index = start_index + attempts
         structure = data_spec.structures[index % len(data_spec.structures)]
         attempts += 1
-        spec = _make_spec(data_spec, structure, index, augment=augment, strength=strength)
+        spec = _make_spec(data_spec, structure, index, mode=mode, strength=strength)
         try:
             response = generate_dataset(spec)
         except PipelineError:
@@ -194,7 +230,7 @@ def build_dataset(tokenizer: NumericTokenizer, data_spec: DataBuildSpec) -> Data
         tokenizer,
         data_spec,
         data_spec.n_train,
-        augment=data_spec.augment,
+        mode="same" if data_spec.augment else "clean",
         strength=data_spec.augment_strength,
         start_index=0,
     )
@@ -202,19 +238,28 @@ def build_dataset(tokenizer: NumericTokenizer, data_spec: DataBuildSpec) -> Data
         tokenizer,
         data_spec,
         data_spec.n_val,
-        augment=data_spec.val_augment,
+        mode=data_spec.val_transform_mode,
         strength=data_spec.val_augment_strength,
         start_index=100_000,
+    )
+    test, skipped_test = _build_split(
+        tokenizer,
+        data_spec,
+        data_spec.n_test,
+        mode=data_spec.test_transform_mode,
+        strength=data_spec.test_augment_strength,
+        start_index=200_000,
     )
     names = [structure.value for structure in data_spec.structures]
     return DatasetBundle(
         train=train,
         val=val,
+        test=test,
         tokenizer=tokenizer,
         data_spec=data_spec,
         max_dim=data_spec.filtration.max_dim,
         structure_names=names,
-        skipped=skipped_train + skipped_val,
+        skipped=skipped_train + skipped_val + skipped_test,
     )
 
 

@@ -502,7 +502,12 @@ def _apply_transform(points: np.ndarray, spec: DatasetSpec) -> np.ndarray:
 
 def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     rng = np.random.default_rng(spec.seed)
-    if spec.n_points < spec.copies:
+    total_points = (
+        spec.points_per_component * spec.copies
+        if spec.points_per_component is not None
+        else spec.n_points
+    )
+    if total_points < spec.copies:
         raise GeneratorError("n_points must be at least as large as copies")
 
     base_kind = spec.structure
@@ -524,10 +529,10 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     )
 
     if spec.copies == 1:
-        points = _single_cloud(spec, base_kind, spec.n_points, rng)
+        points = _single_cloud(spec, base_kind, total_points, rng)
     else:
-        counts = np.full(spec.copies, spec.n_points // spec.copies, dtype=int)
-        counts[: spec.n_points % spec.copies] += 1
+        counts = np.full(spec.copies, total_points // spec.copies, dtype=int)
+        counts[: total_points % spec.copies] += 1
         # One canonical copy is generated and translated. Identical copies keep
         # persistence intervals aligned, which stabilizes b0=N multi-torus
         # labels; variation across generated clouds comes from the batch/seed.
@@ -558,8 +563,11 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     metadata: dict[str, float | int | str | bool | None] = {
         "base_structure": base_kind.value,
         "copies": spec.copies,
+        "points_per_component": spec.points_per_component,
+        "total_points": total_points,
         "seed": spec.seed,
         "transform_seed": spec.transform.seed,
+        "transform": spec.transform.model_dump(mode="json"),
         "nonorientable": base_kind in {StructureKind.KLEIN_BOTTLE, StructureKind.MOBIUS_STRIP},
     }
     if spec.structure is StructureKind.GENUS_SURFACE:

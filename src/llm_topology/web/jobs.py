@@ -12,7 +12,7 @@ from ..config import DatasetSpec, StructureKind
 from ..model.config import AnalysisSpec, DataBuildSpec, TrainingSpec
 from ..model.train import load_checkpoint
 from ..pipeline import generate_dataset
-from ..tokenizer import NumericTokenizer, parse_target_groups, serialize_points
+from ..tokenizer import NumericTokenizer, format_number, parse_target_groups, serialize_points
 
 
 class JobError(RuntimeError):
@@ -118,6 +118,7 @@ class TrainingJob:
                 dataset_info={
                     "train": len(trainer.bundle.train),
                     "val": len(trainer.bundle.val),
+                    "test": len(trainer.bundle.test),
                     "skipped": trainer.bundle.skipped,
                     "max_dim": trainer.bundle.max_dim,
                     "structures": [
@@ -304,8 +305,16 @@ class JobManager:
                 response = generate_dataset(eval_spec)
                 point_text = serialize_points(response.sample.points, precision=data_spec.precision)
                 point_ids = tokenizer.encode(point_text)
+                epsilon_ids: list[int] = []
+                if eval_spec.filtration.epsilon is not None:
+                    epsilon_ids = [
+                        tokenizer.token_to_id["<epsilon>"],
+                        *tokenizer.encode(format_number(response.persistence.epsilon)),
+                        tokenizer.token_to_id[";"],
+                    ]
                 prompt_ids = [
                     tokenizer.token_to_id["<infer>"],
+                    *epsilon_ids,
                     *point_ids,
                     tokenizer.eot_id,
                 ]

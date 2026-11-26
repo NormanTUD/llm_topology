@@ -77,6 +77,21 @@ def test_reference_cloud_is_separate_from_model_sequence() -> None:
     assert response.sequence.startswith("<") is False or response.sequence
 
 
+def test_points_per_component_scales_total_points() -> None:
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.TORUS,
+            copies=3,
+            points_per_component=40,
+            n_points=999,
+            ambient_dim=3,
+            seed=1,
+        )
+    )
+    assert response.sample.n_points == 120
+    assert response.sample.theoretical_betti == [3, 6, 3]
+
+
 def test_multi_torus_components_and_topology_guard() -> None:
     response = generate_dataset(
         DatasetSpec(

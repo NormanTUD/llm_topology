@@ -133,6 +133,7 @@ class TargetSchema(BaseModel):
 class DatasetSpec(BaseModel):
     structure: StructureKind = StructureKind.CIRCLE
     n_points: int = Field(default=240, ge=4)
+    points_per_component: int | None = Field(default=None, ge=4)
     ambient_dim: int = Field(default=3, ge=1, le=64)
     copies: int = Field(default=1, ge=1, le=1000)
     seed: int = 0
@@ -161,7 +162,7 @@ class GeneratedPointCloud(BaseModel):
     n_components: int
     n_points: int
     ambient_dim: int
-    metadata: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class PersistenceSummary(BaseModel):

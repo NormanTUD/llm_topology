@@ -25,6 +25,13 @@
             <button type="button" class="ghost small" id="go-data-studio">build in Data Studio</button>
           </div>
           <div class="dataset-meta" id="dataset-meta">No dataset selected. Build one in Data Studio first.</div>
+          <div class="dataset-preview-controls">
+            <select id="dataset-preview-split"><option value="train">train split</option><option value="val">val split</option><option value="test">test split</option></select>
+            <button type="button" class="ghost small" id="preview-dataset">preview split</button>
+          </div>
+          <div id="dataset-preview" class="prediction-grid">
+            <span class="muted">Preview a split to inspect clouds, token lengths and transforms.</span>
+          </div>
         </details>
 
         <details class="section">
@@ -159,6 +166,8 @@
             <label class="control"><span>Ambient</span><input type="number" id="fresh-ambient" min="2" max="12" value="3"></label>
             <label class="control"><span>Seed</span><input type="number" id="fresh-seed" value="100"></label>
             <label class="control"><span>Structure</span><select id="fresh-structure"></select></label>
+            <label class="control"><span>Filtration</span><select id="fresh-filtration-mode"><option value="auto">auto ε</option><option value="manual">manual ε</option></select></label>
+            <label class="control"><span>Epsilon</span><input type="number" id="fresh-epsilon" step="0.01" min="0" value="0.5" disabled></label>
             <label class="control checkbox"><input type="checkbox" id="fresh-mix" checked><span>Mix structures</span></label>
             <label class="control checkbox"><input type="checkbox" id="fresh-distort" checked><span>Random distortions</span></label>
             <button type="button" class="primary" id="run-predictions">
