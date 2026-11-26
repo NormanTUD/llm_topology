@@ -2,12 +2,13 @@
 
 ## Aktueller Stand
 
-- **Aktuelle Phase:** Phase 1 - Custom Transformer und Training
+- **Aktuelle Phase:** Phase 3 - Invarianz und Kausalitaet
 - **Phase 0:** abgeschlossen (Data Foundation)
-- **Status:** Basis, GUI, Filtration, Tests und CI laufen
-- **Letzter Testlauf:** 65 Tests bestanden, Ruff und Formatierung sauber
-- **Naechster Meilenstein:** eigener Transformer, Multi-Task-Training,
-  Checkpoints und erste Probes
+- **Phase 1:** abgeschlossen (Custom Transformer + Training)
+- **Phase 2:** abgeschlossen (Probes + Heatmaps + Latent-PCA)
+- **Status:** Browser-GUI mit Data Studio, Model Lab und Interpretability
+- **Letzter Testlauf:** 76 Tests bestanden, Ruff und Formatierung sauber
+- **Naechster Meilenstein:** OOD-/Invarianzmatrix, Ablation, Activation Patching
 
 Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 
@@ -68,31 +69,31 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 
 ## Phase 1 - Modell und Training
 
-- [ ] Eigener Decoder-only-Transformer
-- [ ] Kontrollierbare Initialisierung
-- [ ] Token-Embedding und Ausgabekopf
-- [ ] Multi-Task-Ziele: Inferenz und Generierung
-- [ ] Auxiliaere Koepfe
-- [ ] Cross-Entropy, Ranking, Multiple-Choice
-- [ ] Optimizer, LR, Batch, Split, Early Stopping
-- [ ] Checkpoints, Resume, Seeds
-- [ ] Live-Training im Browser
-- [ ] Modelltests und Shape-Tests
-- [ ] Default-Modellgroesse fuer CPU festlegen
-- [ ] Kontextlaenge, Koordinatenpraezision und Punktbudget kalibrieren
-- [ ] CPU/CUDA/MPS-Erkennung
+- [x] Eigener Decoder-only-Transformer
+- [x] Kontrollierbare Initialisierung
+- [x] Token-Embedding und Ausgabekopf
+- [x] Multi-Task-Ziele: Inferenz und Generierung
+- [x] Auxiliaere Koepfe
+- [x] Cross-Entropy, Ranking, Multiple-Choice
+- [x] Optimizer, LR, Batch, Split, Early Stopping
+- [x] Checkpoints, Resume, Seeds
+- [x] Live-Training im Browser
+- [x] Modelltests und Shape-Tests
+- [x] Default-Modellgroesse fuer CPU festlegen
+- [x] Kontextlaenge, Koordinatenpraezision und Punktbudget kalibrieren
+- [x] CPU/CUDA/MPS-Erkennung
 
 ## Phase 2 - Interpretierbarkeit
 
-- [ ] Lineare Probes pro Layer
-- [ ] Probe-Gewichts-Heatmaps
-- [ ] Aktivierungs- und Neuron-Heatmaps
-- [ ] Attention-Maps
-- [ ] FFN-Neuronen-Explorer
-- [ ] Latent-Projektionen (PCA/UMAP)
-- [ ] Trajektorien ueber Trainingsschritte
+- [x] Lineare Probes pro Layer
+- [x] Probe-Gewichts-Heatmaps
+- [x] Aktivierungs- und Neuron-Heatmaps
+- [x] Attention-Maps
+- [x] FFN-Neuronen-Explorer
+- [x] Latent-Projektionen (PCA; UMAP spaeter)
+- [ ] Latente Trajektorien ueber Trainingsschritte (Loss-Historie ist da)
 
-## Phase 3 - Invarianz und Kausalitaet
+## Phase 3 - Invarianz und Kausalitaet (aktuell)
 
 - [ ] OOD-Transformationsbenchmarks
 - [ ] Leichte und strenge Invarianzmatrix
@@ -113,12 +114,13 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [ ] Interaktiver Equation Explorer
 - [ ] Visueller Feinschliff
 
-## Offene Phase-1-Entscheidungen
+## Offene Phase-3-Entscheidungen
 
-- [ ] Generierung zuerst als Sequenzmodell oder separater Decoder-Kopf?
-- [ ] Konkrete Default-Modellgroesse fuer CPU?
-- [ ] `structure_id` numerisch oder alphanumerisch?
-- [ ] Zielgruppen-Reihenfolge pro Run fixiert oder permutierbar?
+- [ ] Ablationsachse: Neuronen, Heads, Layer oder Residualrichtungen?
+- [ ] Activation Patching zwischen Strukturen, Transformationen oder Labels?
+- [ ] Pflicht-OOD-Achsen: Rotation, Stretch, Twist, Rauschen, Punktanzahl,
+      Ambient-Dimension, ungesehene Genus-Werte?
+- [ ] Invarianzmatrix pro Struktur oder pro Betti-Komponente?
+- [ ] Generierte Punktwolken automatisch topologisch auswerten?
 - [ ] Exaktes Q: rationale Gauss-Elimination, Gudhi oder externe Bibliothek?
-- [ ] Python-Snippets: AST-Whitelist oder vertrauenswuerdiger Subprozess?
 - [ ] Welche Gleichungen werden zuerst interaktiv?
