@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LLM Topology Lab</title>
+  <meta name="description" content="An observatory for topological representations in a custom transformer.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+  <div class="grid-overlay"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <div>
+        <div class="eyebrow">REPRESENTATION OBSERVATORY</div>
+        <h1>Topology Lab</h1>
+      </div>
+    </div>
+    <div class="topbar-meta">
+      <span class="chip chip-live" id="phase-chip">Phase 0 · Data foundation</span>
+      <span class="chip" id="health-chip">booting</span>
+      <span class="chip chip-mono" id="version-chip">v0.1.0</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel sidebar">
+      <div class="panel-heading">
+        <div>
+          <span class="eyebrow">DATA STUDIO</span>
+          <h2>Generate a universe</h2>
+        </div>
+        <button type="button" class="ghost small" id="randomize-btn" title="Randomize seed">seed</button>
+      </div>
+
+      <form id="generate-form" autocomplete="off">
+        <div class="control-grid">
+          <label class="control span-2">
+            <span>Structure</span>
+            <select name="structure" id="structure-select"></select>
+          </label>
+
+          <label class="control span-2 hidden" id="base-structure-wrap">
+            <span>Base structure</span>
+            <select name="base_structure" id="base-structure-select"></select>
+          </label>
+
+          <label class="control">
+            <span>Points</span>
+            <input type="number" name="n_points" id="n-points" min="8" step="1" value="240">
+          </label>
+
+          <label class="control">
+            <span>Ambient dim</span>
+            <input type="number" name="ambient_dim" id="ambient-dim" min="2" max="64" step="1" value="3">
+          </label>
+
+          <label class="control">
+            <span>Copies</span>
+            <input type="number" name="copies" id="copies" min="1" max="1000" step="1" value="1">
+          </label>
+
+          <label class="control">
+            <span>Genus</span>
+            <input type="number" name="genus" id="genus" min="1" max="32" step="1" value="2">
+          </label>
+
+          <label class="control span-2">
+            <span>Seed</span>
+            <input type="number" name="seed" id="seed" step="1" value="0">
+          </label>
+        </div>
+
+        <details class="section" open>
+          <summary>Geometry transforms <span class="summary-note">not shown to the model</span></summary>
+          <div class="control-grid">
+            <label class="control"><span>Rotate x</span><input type="number" name="rot_x" step="1" value="0"></label>
+            <label class="control"><span>Rotate y</span><input type="number" name="rot_y" step="1" value="0"></label>
+            <label class="control"><span>Rotate z</span><input type="number" name="rot_z" step="1" value="0"></label>
+            <label class="control"><span>Stretch x</span><input type="number" name="stretch_x" step="0.05" value="1"></label>
+            <label class="control"><span>Stretch y</span><input type="number" name="stretch_y" step="0.05" value="1"></label>
+            <label class="control"><span>Stretch z</span><input type="number" name="stretch_z" step="0.05" value="1"></label>
+            <label class="control"><span>Twist</span><input type="number" name="twist" step="0.05" value="0"></label>
+            <label class="control"><span>Noise</span><input type="number" name="noise" step="0.01" min="0" value="0"></label>
+            <label class="control checkbox">
+              <input type="checkbox" name="permute">
+              <span>Permute points</span>
+            </label>
+          </div>
+        </details>
+
+        <details class="section" open>
+          <summary>Filtration <span class="summary-note">alpha default</span></summary>
+          <div class="control-grid">
+            <label class="control">
+              <span>Method</span>
+              <select name="method" id="method-select">
+                <option value="alpha">Alpha complex</option>
+                <option value="rips">Vietoris–Rips</option>
+              </select>
+            </label>
+            <label class="control">
+              <span>Field</span>
+              <select name="field">
+                <option value="Z2">Z2</option>
+                <option value="Z3">Z3 (Q-proxy)</option>
+              </select>
+            </label>
+            <label class="control">
+              <span>Max homology dim</span>
+              <input type="number" name="max_dim" id="max-dim" min="0" max="6" step="1" value="2">
+            </label>
+            <label class="control checkbox">
+              <input type="checkbox" name="auto_epsilon" id="auto-epsilon" checked>
+              <span>Auto epsilon</span>
+            </label>
+            <label class="control span-2" id="epsilon-wrap">
+              <span>Epsilon</span>
+              <input type="number" name="epsilon" id="epsilon" step="0.01" min="0" disabled placeholder="auto">
+            </label>
+            <label class="control span-2 hidden" id="rips-edge-wrap">
+              <span>Max edge length</span>
+              <input type="number" name="max_edge_length" id="max-edge-length" step="0.05" min="0" placeholder="auto quantile">
+            </label>
+          </div>
+        </details>
+
+        <details class="section" open>
+          <summary>Target groups <span class="summary-note">fixed order, separated by ;</span></summary>
+          <div id="target-blocks" class="target-blocks"></div>
+        </details>
+
+        <button type="submit" class="primary" id="generate-btn">
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-label">Generate point cloud</span>
+        </button>
+        <div class="form-hint">Ctrl / Cmd + Enter to regenerate</div>
+      </form>
+    </aside>
+
+    <section class="content">
+      <div id="error-banner" class="banner error hidden"></div>
+      <div id="warning-list" class="warning-list"></div>
+
+      <div class="metrics-grid">
+        <article class="metric-card">
+          <div class="metric-label">Theoretical Betti</div>
+          <div class="metric-value" id="metric-theory">—</div>
+          <div class="metric-note">generator label</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Computed PH</div>
+          <div class="metric-value accent-cyan" id="metric-ph">—</div>
+          <div class="metric-note" id="metric-field">Z2 · alpha</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Epsilon</div>
+          <div class="metric-value" id="metric-epsilon">—</div>
+          <div class="metric-note" id="metric-epsilon-note">auto selected</div>
+        </article>
+        <article class="metric-card">
+          <div class="metric-label">Structure</div>
+          <div class="metric-value metric-value-small" id="metric-structure">—</div>
+          <div class="metric-note" id="metric-counts">—</div>
+        </article>
+      </div>
+
+      <div class="plot-grid">
+        <article class="panel plot-card span-2">
+          <div class="panel-heading compact">
+            <div>
+              <span class="eyebrow">GEOMETRY</span>
+              <h2>Point cloud</h2>
+            </div>
+            <span class="chip chip-mono" id="projection-method">—</span>
+          </div>
+          <div id="cloud-plot" class="plot plot-tall">
+            <div class="plot-placeholder">Generate a point cloud to begin.</div>
+          </div>
+        </article>
+
+        <article class="panel plot-card">
+          <div class="panel-heading compact">
+            <div>
+              <span class="eyebrow">SIGNATURE</span>
+              <h2>Persistence</h2>
+            </div>
+          </div>
+          <div id="persistence-plot" class="plot">
+            <div class="plot-placeholder">Birth–death pairs appear here.</div>
+          </div>
+        </article>
+
+        <article class="panel plot-card">
+          <div class="panel-heading compact">
+            <div>
+              <span class="eyebrow">FILTRATION</span>
+              <h2>Betti curves</h2>
+            </div>
+          </div>
+          <div id="betti-plot" class="plot">
+            <div class="plot-placeholder">Betti curves appear here.</div>
+          </div>
+        </article>
+      </div>
+
+      <div class="details-grid">
+        <article class="panel">
+          <div class="panel-heading compact">
+            <div>
+              <span class="eyebrow">SUPERVISION</span>
+              <h2>Target vector</h2>
+            </div>
+            <button type="button" class="ghost small" id="copy-target">copy</button>
+          </div>
+          <div class="target-table-wrap">
+            <table class="target-table" id="target-table">
+              <thead><tr><th>Group</th><th>Fields</th><th>Values</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="stream-label">canonical target string</div>
+          <pre class="stream" id="target-text">—</pre>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading compact">
+            <div>
+              <span class="eyebrow">SEQUENCE</span>
+              <h2>Model input</h2>
+            </div>
+            <button type="button" class="ghost small" id="copy-sequence">copy</button>
+          </div>
+          <div class="stream-label">points · boundary · targets</div>
+          <pre class="stream stream-tall" id="sequence-text">—</pre>
+          <div class="stream-label">target token stream</div>
+          <div class="token-stream" id="token-stream"><span class="muted">Generate to inspect tokens.</span></div>
+        </article>
+      </div>
+
+      <article class="panel equations-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">EQUATION EXPLORER</span>
+            <h2>What the machine sees</h2>
+          </div>
+          <span class="chip">Temml · live values</span>
+        </div>
+        <div class="equation-grid" id="equation-grid"></div>
+      </article>
+
+      <footer class="footer">
+        <span>Phase 0 · data foundation</span>
+        <span>Custom transformer · TDA · linear probes</span>
+        <span id="footer-state">ready</span>
+      </footer>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/temml/dist/temml.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

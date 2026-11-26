@@ -1,0 +1,647 @@
+const state = {
+  catalog: null,
+  last: null,
+  equationValues: {},
+};
+
+const COLORS = ["#5eead4", "#fb923c", "#a78bfa", "#f472b6"];
+const DIM_NAMES = ["H0", "H1", "H2", "H3"];
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+function clampInt(value, min, max, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function numberValue(name, fallback = 0) {
+  const element = $(`[name="${name}"]`);
+  if (!element) return fallback;
+  const parsed = Number(element.value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function setStatus(text, isError = false) {
+  const footer = $("#footer-state");
+  if (footer) {
+    footer.textContent = text;
+    footer.style.color = isError ? "var(--red)" : "";
+  }
+}
+
+let toastTimer = null;
+function toast(message, isError = false) {
+  const element = $("#toast");
+  element.textContent = message;
+  element.classList.toggle("error", isError);
+  element.classList.add("show");
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => element.classList.remove("show"), 2600);
+}
+
+function showError(message) {
+  const banner = $("#error-banner");
+  banner.textContent = message;
+  banner.classList.remove("hidden");
+  setStatus("generation failed", true);
+}
+
+function hideError() {
+  const banner = $("#error-banner");
+  banner.textContent = "";
+  banner.classList.add("hidden");
+}
+
+async function fetchJSON(url, options = {}) {
+  const response = await fetch(url, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options,
+  });
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const body = await response.json();
+      if (typeof body.detail === "string") detail = body.detail;
+      else if (body.detail) detail = JSON.stringify(body.detail);
+    } catch (_error) {
+      // Keep the HTTP status text.
+    }
+    throw new Error(detail || `HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+function plotlyReady() {
+  return typeof window.Plotly !== "undefined";
+}
+
+function plotlyLayout(extra = {}) {
+  return {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    font: { family: "Inter, system-ui, sans-serif", color: "#8b9bb4", size: 10 },
+    margin: { l: 46, r: 18, t: 18, b: 42 },
+    hoverlabel: {
+      bgcolor: "#0b1220",
+      bordercolor: "rgba(94,234,212,.28)",
+      font: { color: "#e9eff9", family: "JetBrains Mono, monospace", size: 10 },
+    },
+    ...extra,
+  };
+}
+
+function plotConfig() {
+  return { responsive: true, displayModeBar: false };
+}
+
+async function loadCatalog() {
+  state.catalog = await fetchJSON("/api/catalog");
+  const structureSelect = $("#structure-select");
+  const baseSelect = $("#base-structure-select");
+  structureSelect.innerHTML = "";
+  baseSelect.innerHTML = "";
+  for (const structure of state.catalog.structures) {
+    const option = document.createElement("option");
+    option.value = structure.value;
+    option.textContent = `${structure.label}`;
+    structureSelect.appendChild(option);
+    if (structure.value !== "disjoint") {
+      const baseOption = option.cloneNode(true);
+      baseSelect.appendChild(baseOption);
+    }
+  }
+  structureSelect.value = state.catalog.default_spec.structure;
+  baseSelect.value = "torus";
+  $("#version-chip").textContent = `v${state.catalog.version}`;
+  $("#phase-chip").textContent = state.catalog.phase;
+  $("#projection-method").textContent = "—";
+  renderTargetBlocks();
+  syncStructureVisibility();
+  syncMethodVisibility();
+}
+
+function selectedTargetNames() {
+  return $$(".target-check:checked").map((input) => input.dataset.block);
+}
+
+function renderTargetBlocks() {
+  const container = $("#target-blocks");
+  if (!state.catalog) return;
+  const checkedBefore = new Set(selectedTargetNames());
+  const initial = checkedBefore.size ? checkedBefore : new Set(["betti", "ph", "genus", "n_components", "filtration"]);
+  const maxDim = clampInt($("#max-dim")?.value, 0, 6, 2);
+  container.innerHTML = "";
+  for (const block of state.catalog.target_blocks) {
+    const fields = ["betti", "ph"].includes(block.name)
+      ? Array.from({ length: maxDim + 1 }, (_, index) => `b${index}`)
+      : block.fields;
+    const row = document.createElement("div");
+    row.className = "target-block";
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "target-check";
+    checkbox.dataset.block = block.name;
+    checkbox.checked = initial.has(block.name);
+    const text = document.createElement("span");
+    text.textContent = block.name;
+    label.appendChild(checkbox);
+    label.appendChild(text);
+    const fieldText = document.createElement("span");
+    fieldText.className = "fields";
+    fieldText.textContent = fields.join(",");
+    row.appendChild(label);
+    row.appendChild(fieldText);
+    container.appendChild(row);
+  }
+}
+
+function syncStructureVisibility() {
+  const structure = $("#structure-select").value;
+  $("#base-structure-wrap").classList.toggle("hidden", structure !== "disjoint");
+  const ambient = $("#ambient-dim");
+  if (structure === "klein_bottle" && Number(ambient.value) < 4) {
+    ambient.value = "4";
+  }
+  const needsGenus = structure === "genus_surface";
+  $("#genus").disabled = !needsGenus;
+  if (!needsGenus) $("#genus").value = "2";
+}
+
+function syncMethodVisibility() {
+  const method = $("#method-select").value;
+  $("#rips-edge-wrap").classList.toggle("hidden", method !== "rips");
+}
+
+function syncEpsilonVisibility() {
+  const auto = $("#auto-epsilon").checked;
+  const epsilon = $("#epsilon");
+  epsilon.disabled = auto;
+  if (auto) epsilon.value = "";
+}
+
+function buildSchema() {
+  const maxDim = clampInt($("#max-dim").value, 0, 6, 2);
+  const selected = selectedTargetNames();
+  if (!selected.length) throw new Error("Select at least one target group.");
+  const blocks = selected.map((name) => {
+    const template = state.catalog.target_blocks.find((block) => block.name === name);
+    const fields = ["betti", "ph"].includes(name)
+      ? Array.from({ length: maxDim + 1 }, (_, index) => `b${index}`)
+      : template.fields;
+    return { name, fields };
+  });
+  return { blocks };
+}
+
+function buildSpec() {
+  const structure = $("#structure-select").value;
+  const maxDim = clampInt($("#max-dim").value, 0, 6, 2);
+  const autoEpsilon = $("#auto-epsilon").checked;
+  const method = $("#method-select").value;
+  const seed = numberValue("seed", 0);
+  const edgeRaw = $("#max-edge-length").value.trim();
+  const epsilonRaw = $("#epsilon").value.trim();
+  const params = {};
+  if (structure === "disjoint") params.base_structure = $("#base-structure-select").value;
+
+  return {
+    structure,
+    n_points: clampInt($("#n-points").value, 4, 100000, 240),
+    ambient_dim: clampInt($("#ambient-dim").value, 2, 64, 3),
+    copies: clampInt($("#copies").value, 1, 1000, 1),
+    genus: clampInt($("#genus").value, 1, 32, 2),
+    seed,
+    params,
+    transform: {
+      rotation_deg: [
+        numberValue("rot_x", 0),
+        numberValue("rot_y", 0),
+        numberValue("rot_z", 0),
+      ],
+      stretch: [
+        Math.max(0.01, numberValue("stretch_x", 1)),
+        Math.max(0.01, numberValue("stretch_y", 1)),
+        Math.max(0.01, numberValue("stretch_z", 1)),
+      ],
+      twist: numberValue("twist", 0),
+      translation: [0, 0, 0],
+      noise: Math.max(0, numberValue("noise", 0)),
+      permute: $('[name="permute"]').checked,
+      seed: seed + 1,
+    },
+    filtration: {
+      method,
+      field: $('[name="field"]').value,
+      max_dim: maxDim,
+      epsilon: autoEpsilon || epsilonRaw === "" ? null : Math.max(0, Number(epsilonRaw)),
+      max_edge_length: method === "rips" && edgeRaw !== "" ? Math.max(0.0001, Number(edgeRaw)) : null,
+      rips_threshold_quantile: 0.35,
+    },
+    target_schema: buildSchema(),
+  };
+}
+
+function setLoading(loading) {
+  const button = $("#generate-btn");
+  button.disabled = loading;
+  button.classList.toggle("loading", loading);
+  $(".btn-label").textContent = loading ? "Computing filtration…" : "Generate point cloud";
+}
+
+async function generate() {
+  hideError();
+  setLoading(true);
+  setStatus("generating");
+  try {
+    const spec = buildSpec();
+    const data = await fetchJSON("/api/generate", {
+      method: "POST",
+      body: JSON.stringify(spec),
+    });
+    state.last = data;
+    render(data);
+    setStatus("ready");
+  } catch (error) {
+    showError(error.message || String(error));
+    toast(error.message || "Generation failed", true);
+  } finally {
+    setLoading(false);
+  }
+}
+
+function render(data) {
+  renderWarnings(data.warnings || []);
+  renderMetrics(data);
+  renderCloud(data);
+  renderPersistence(data);
+  renderBetti(data);
+  renderTargets(data);
+  renderSequence(data);
+  renderEquationValues(data);
+}
+
+function renderWarnings(warnings) {
+  const container = $("#warning-list");
+  container.innerHTML = "";
+  for (const warning of warnings) {
+    const item = document.createElement("div");
+    item.className = "warning";
+    item.textContent = warning;
+    container.appendChild(item);
+  }
+}
+
+function renderMetrics(data) {
+  const sample = data.sample;
+  const persistence = data.persistence;
+  $("#metric-theory").textContent = `(${sample.theoretical_betti.join(", ")})`;
+  $("#metric-ph").textContent = `(${persistence.betti.join(", ")})`;
+  $("#metric-field").textContent = `${persistence.field} · ${persistence.method}`;
+  $("#metric-epsilon").textContent = Number(persistence.epsilon).toFixed(4);
+  $("#metric-epsilon-note").textContent = "auto-selected filtration scale";
+  $("#metric-structure").textContent = sample.structure_name;
+  $("#metric-counts").textContent =
+    `${sample.n_points} points · ${sample.n_components} components · genus ${sample.genus}`;
+  $("#projection-method").textContent = data.projection_method;
+}
+
+function renderCloud(data) {
+  const element = $("#cloud-plot");
+  if (!plotlyReady()) {
+    element.innerHTML = '<div class="plot-placeholder">Plotly could not be loaded.</div>';
+    return;
+  }
+  const projected = data.projection;
+  const colors = projected.map((_, index) => index);
+  const trace = {
+    type: "scatter3d",
+    mode: "markers",
+    x: projected.map((point) => point[0]),
+    y: projected.map((point) => point[1]),
+    z: projected.map((point) => point[2]),
+    marker: {
+      size: data.sample.n_points > 900 ? 2.1 : 3.2,
+      color: colors,
+      colorscale: [
+        [0, "#60a5fa"],
+        [0.35, "#5eead4"],
+        [0.7, "#a78bfa"],
+        [1, "#fb923c"],
+      ],
+      opacity: 0.88,
+      line: { width: 0 },
+    },
+    hovertemplate: "p %{pointNumber}<br>x %{x:.3f}<br>y %{y:.3f}<br>z %{z:.3f}<extra></extra>",
+  };
+  const layout = plotlyLayout({
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    scene: {
+      bgcolor: "rgba(0,0,0,0)",
+      xaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
+      yaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
+      zaxis: { title: "", showgrid: true, gridcolor: "rgba(148,163,184,.10)", zeroline: false, showticklabels: false },
+      camera: { eye: { x: 1.35, y: 1.15, z: 1.05 } },
+      aspectmode: "data",
+    },
+  });
+  window.Plotly.newPlot(element, [trace], layout, plotConfig());
+}
+
+function renderPersistence(data) {
+  const element = $("#persistence-plot");
+  if (!plotlyReady()) {
+    element.innerHTML = '<div class="plot-placeholder">Plotly could not be loaded.</div>';
+    return;
+  }
+  const diagrams = data.persistence.diagrams;
+  const allDeaths = diagrams.flat().map((pair) => pair[1]).filter((value) => value !== null);
+  const maxFinite = allDeaths.length ? Math.max(...allDeaths) : data.persistence.epsilon;
+  const upper = Math.max(maxFinite * 1.08, data.persistence.epsilon * 1.08, 0.1);
+  const traces = [];
+  diagrams.forEach((diagram, dimension) => {
+    if (!diagram.length) return;
+    const finite = diagram.filter((pair) => pair[1] !== null);
+    const infinite = diagram.filter((pair) => pair[1] === null);
+    if (finite.length) {
+      traces.push({
+        type: "scattergl",
+        mode: "markers",
+        name: DIM_NAMES[dimension] || `H${dimension}`,
+        x: finite.map((pair) => pair[0]),
+        y: finite.map((pair) => pair[1]),
+        marker: { color: COLORS[dimension % COLORS.length], size: 6, opacity: 0.82 },
+        hovertemplate: `${DIM_NAMES[dimension] || `H${dimension}`} birth %{x:.3f}<br>death %{y:.3f}<extra></extra>`,
+      });
+    }
+    if (infinite.length) {
+      traces.push({
+        type: "scattergl",
+        mode: "markers",
+        name: `${DIM_NAMES[dimension] || `H${dimension}`} infinite`,
+        x: infinite.map((pair) => pair[0]),
+        y: infinite.map(() => upper),
+        marker: { color: COLORS[dimension % COLORS.length], size: 8, symbol: "diamond", opacity: 0.9 },
+        hovertemplate: `${DIM_NAMES[dimension] || `H${dimension}`} infinite<extra></extra>`,
+      });
+    }
+  });
+  traces.push({
+    type: "scatter",
+    mode: "lines",
+    name: "diagonal",
+    x: [0, upper],
+    y: [0, upper],
+    line: { color: "rgba(139,155,180,.25)", width: 1, dash: "dot" },
+    hoverinfo: "skip",
+    showlegend: false,
+  });
+  const layout = plotlyLayout({
+    showlegend: true,
+    legend: { orientation: "h", y: 1.08, x: 0, font: { size: 9 } },
+    xaxis: { title: "birth", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
+    yaxis: { title: "death", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
+  });
+  window.Plotly.newPlot(element, traces, layout, plotConfig());
+}
+
+function renderBetti(data) {
+  const element = $("#betti-plot");
+  if (!plotlyReady()) {
+    element.innerHTML = '<div class="plot-placeholder">Plotly could not be loaded.</div>';
+    return;
+  }
+  const grid = data.persistence.epsilon_grid;
+  const curve = data.persistence.betti_curve;
+  const traces = [];
+  const dims = curve.length ? curve[0].length : 0;
+  for (let dimension = 0; dimension < dims; dimension += 1) {
+    traces.push({
+      type: "scatter",
+      mode: "lines",
+      name: DIM_NAMES[dimension] || `H${dimension}`,
+      x: grid,
+      y: curve.map((row) => row[dimension]),
+      line: { color: COLORS[dimension % COLORS.length], width: 2, shape: "hv" },
+      hovertemplate: `${DIM_NAMES[dimension] || `H${dimension}`} = %{y}<br>epsilon %{x:.3f}<extra></extra>`,
+    });
+  }
+  const layout = plotlyLayout({
+    showlegend: true,
+    legend: { orientation: "h", y: 1.08, x: 0, font: { size: 9 } },
+    xaxis: { title: "epsilon", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
+    yaxis: { title: "betti", gridcolor: "rgba(148,163,184,.08)", zeroline: false, rangemode: "tozero" },
+    shapes: [
+      {
+        type: "line",
+        x0: data.persistence.epsilon,
+        x1: data.persistence.epsilon,
+        y0: 0,
+        y1: 1,
+        yref: "paper",
+        line: { color: "rgba(94,234,212,.5)", width: 1, dash: "dash" },
+      },
+    ],
+  });
+  window.Plotly.newPlot(element, traces, layout, plotConfig());
+}
+
+function renderTargets(data) {
+  const tbody = $("#target-table tbody");
+  tbody.innerHTML = "";
+  data.target_schema.blocks.forEach((block, index) => {
+    const values = data.target_groups[index] || [];
+    const row = document.createElement("tr");
+    const nameCell = document.createElement("td");
+    nameCell.textContent = block.name;
+    const fieldsCell = document.createElement("td");
+    fieldsCell.textContent = block.fields.join(", ");
+    const valuesCell = document.createElement("td");
+    valuesCell.textContent = values.map((value) => Number(value).toString()).join(", ");
+    row.appendChild(nameCell);
+    row.appendChild(fieldsCell);
+    row.appendChild(valuesCell);
+    tbody.appendChild(row);
+  });
+  $("#target-text").textContent = data.target_text;
+  const sequence = data.sequence;
+  $("#sequence-text").textContent = sequence.length > 18000 ? `${sequence.slice(0, 18000)}\n…` : sequence;
+  renderTokenStream(data.target_text);
+}
+
+async function renderTokenStream(text) {
+  const container = $("#token-stream");
+  container.innerHTML = "";
+  try {
+    const payload = await fetchJSON("/api/tokenize", {
+      method: "POST",
+      body: JSON.stringify({ text, strict: true }),
+    });
+    const limit = 260;
+    payload.tokens.slice(0, limit).forEach((token, index) => {
+      const chip = document.createElement("span");
+      chip.className = `token${token.startsWith("<") ? " special" : ""}`;
+      const value = document.createElement("span");
+      value.textContent = token;
+      const id = document.createElement("span");
+      id.className = "id";
+      id.textContent = payload.ids[index];
+      chip.appendChild(value);
+      chip.appendChild(id);
+      container.appendChild(chip);
+    });
+    if (payload.tokens.length > limit) {
+      const more = document.createElement("span");
+      more.className = "muted";
+      more.textContent = `+${payload.tokens.length - limit} more tokens`;
+      container.appendChild(more);
+    }
+    if (!payload.tokens.length) {
+      container.innerHTML = '<span class="muted">Empty target.</span>';
+    }
+  } catch (error) {
+    container.innerHTML = `<span class="muted">${error.message}</span>`;
+  }
+}
+
+function renderSequence(data) {
+  const sequence = data.sequence;
+  $("#sequence-text").textContent = sequence.length > 18000 ? `${sequence.slice(0, 18000)}\n…` : sequence;
+}
+
+function renderEquations() {
+  const equations = [
+    {
+      key: "betti",
+      title: "Betti number",
+      tex: String.raw`b_k(\varepsilon) = \dim_{\mathbb{F}} H_k\!\left(\mathrm{VR}_\varepsilon(X)\right)`,
+    },
+    {
+      key: "sequence",
+      title: "Token stream",
+      tex: String.raw`\mathcal{S} = x_1,y_1,z_1;\ldots;\;<\mathrm{endoftext}>\;b_0,b_1,b_2;\ldots`,
+    },
+    {
+      key: "persistence",
+      title: "Persistence diagram",
+      tex: String.raw`\mathrm{PD}_k = \left\{(\mathrm{birth}_i,\mathrm{death}_i)\right\}_{i=1}^{m_k}`,
+    },
+    {
+      key: "attention",
+      title: "Attention · Phase 1",
+      tex: String.raw`\mathrm{Attn}(Q,K,V)=\mathrm{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right)V`,
+    },
+    {
+      key: "ffn",
+      title: "FFN · Phase 1",
+      tex: String.raw`\mathrm{FFN}(x)=W_2\,\sigma(W_1x+b_1)+b_2`,
+    },
+    {
+      key: "probe",
+      title: "Linear probe",
+      tex: String.raw`\hat b_k = w_k^\top h_\ell + c_k`,
+    },
+  ];
+  const grid = $("#equation-grid");
+  grid.innerHTML = "";
+  for (const equation of equations) {
+    const card = document.createElement("div");
+    card.className = "equation-card";
+    const title = document.createElement("div");
+    title.className = "equation-title";
+    title.textContent = equation.title;
+    const body = document.createElement("div");
+    body.className = "equation-body";
+    const value = document.createElement("div");
+    value.className = "equation-value";
+    value.dataset.equation = equation.key;
+    try {
+      if (window.temml && typeof window.temml.render === "function") {
+        window.temml.render(equation.tex, body);
+      } else {
+        body.textContent = equation.tex;
+      }
+    } catch (_error) {
+      body.textContent = equation.tex;
+    }
+    card.appendChild(title);
+    card.appendChild(body);
+    card.appendChild(value);
+    grid.appendChild(card);
+    state.equationValues[equation.key] = value;
+  }
+}
+
+function renderEquationValues(data) {
+  const values = state.equationValues;
+  if (values.betti) {
+    values.betti.textContent =
+      `current b = (${data.persistence.betti.join(", ")}) · epsilon = ${data.persistence.epsilon.toFixed(4)}`;
+  }
+  if (values.sequence) {
+    values.sequence.textContent =
+      `boundary = <endoftext> · target groups = ${data.target_schema.blocks.length} · tokens ≈ ${data.sequence.length}`;
+  }
+  if (values.persistence) {
+    const finite = data.persistence.diagrams.flat().filter((pair) => pair[1] !== null).length;
+    values.persistence.textContent = `${finite} finite persistence pairs`;
+  }
+  if (values.attention) values.attention.textContent = "custom transformer arrives in Phase 1";
+  if (values.ffn) values.ffn.textContent = "layer-wise neuron maps arrive in Phase 1";
+  if (values.probe) {
+    values.probe.textContent = `planned target: ${data.target_schema.blocks.map((block) => block.name).join(" · ")}`;
+  }
+}
+
+async function copyText(text, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    toast(`${label} copied`);
+  } catch (_error) {
+    toast("Clipboard unavailable", true);
+  }
+}
+
+async function boot() {
+  renderEquations();
+  try {
+    const health = await fetchJSON("/api/health");
+    $("#health-chip").textContent = `python ${health.python} · gudhi ${health.gudhi}`;
+  } catch (_error) {
+    $("#health-chip").textContent = "offline";
+  }
+  try {
+    await loadCatalog();
+  } catch (error) {
+    showError(`Could not load catalog: ${error.message}`);
+    return;
+  }
+  $("#structure-select").addEventListener("change", syncStructureVisibility);
+  $("#method-select").addEventListener("change", syncMethodVisibility);
+  $("#auto-epsilon").addEventListener("change", syncEpsilonVisibility);
+  $("#max-dim").addEventListener("change", renderTargetBlocks);
+  $("#randomize-btn").addEventListener("click", () => {
+    $("#seed").value = String(Math.floor(Math.random() * 1_000_000));
+    toast("Seed randomized");
+  });
+  $("#generate-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    generate();
+  });
+  $("#copy-target").addEventListener("click", () => {
+    if (state.last) copyText(state.last.target_text, "Target");
+  });
+  $("#copy-sequence").addEventListener("click", () => {
+    if (state.last) copyText(state.last.sequence, "Sequence");
+  });
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      generate();
+    }
+  });
+  await generate();
+}
+
+boot();

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
 
-class StructureKind(str, Enum):
+class StructureKind(StrEnum):
     CIRCLE = "circle"
     SPHERE = "sphere"
     TORUS = "torus"
@@ -21,12 +21,12 @@ class StructureKind(str, Enum):
     BALL = "ball"
 
 
-class FiltrationMethod(str, Enum):
+class FiltrationMethod(StrEnum):
     ALPHA = "alpha"
     RIPS = "rips"
 
 
-class CoefficientField(str, Enum):
+class CoefficientField(StrEnum):
     Z2 = "Z2"
     Z3 = "Z3"
 
@@ -62,7 +62,7 @@ class TransformSpec(BaseModel):
 
 class FiltrationSpec(BaseModel):
     method: FiltrationMethod = FiltrationMethod.ALPHA
-    max_dim: int = Field(default=2, ge=0, le=3)
+    max_dim: int = Field(default=2, ge=0, le=6)
     field: CoefficientField = CoefficientField.Z2
     epsilon: float | None = Field(default=None, ge=0)
     max_edge_length: float | None = Field(default=None, gt=0)
@@ -97,6 +97,14 @@ def default_target_blocks(max_dim: int = 2) -> list[TargetBlock]:
     ]
 
 
+def optional_target_blocks() -> list[TargetBlock]:
+    return [
+        TargetBlock(name="structure_id", fields=["structure_id"]),
+        TargetBlock(name="n_points", fields=["n_points"]),
+        TargetBlock(name="ambient_dim", fields=["ambient_dim"]),
+    ]
+
+
 class TargetSchema(BaseModel):
     blocks: list[TargetBlock] = Field(default_factory=default_target_blocks)
 
@@ -115,19 +123,17 @@ class TargetSchema(BaseModel):
     @property
     def flat_fields(self) -> list[str]:
         return [
-            f"{block.name}.{field_name}"
-            for block in self.blocks
-            for field_name in block.fields
+            f"{block.name}.{field_name}" for block in self.blocks for field_name in block.fields
         ]
 
 
 class DatasetSpec(BaseModel):
     structure: StructureKind = StructureKind.CIRCLE
     n_points: int = Field(default=240, ge=4)
-    ambient_dim: int = Field(default=3, ge=1, le=12)
-    copies: int = Field(default=1, ge=1, le=32)
+    ambient_dim: int = Field(default=3, ge=1, le=64)
+    copies: int = Field(default=1, ge=1, le=1000)
     seed: int = 0
-    genus: int = Field(default=2, ge=1, le=8)
+    genus: int = Field(default=2, ge=1, le=32)
     params: dict[str, float | int | str | bool | None] = Field(default_factory=dict)
     transform: TransformSpec = Field(default_factory=TransformSpec)
     filtration: FiltrationSpec = Field(default_factory=FiltrationSpec)
@@ -175,4 +181,6 @@ class DatasetResponse(BaseModel):
     target_text: str
     sequence: str
     target_schema: TargetSchema
+    projection: list[list[float]] = Field(default_factory=list)
+    projection_method: str = "first-3"
     warnings: list[str] = Field(default_factory=list)

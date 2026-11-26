@@ -101,9 +101,7 @@ def theoretical_topology(
         base = TheoreticalTopology((1, 2, 0), (1, 2, 0), 0, 1)
     elif kind is StructureKind.KLEIN_BOTTLE:
         base = TheoreticalTopology((1, 2, 1), (1, 1, 0), 1, 1)
-    elif kind is StructureKind.MOBIUS_STRIP:
-        base = TheoreticalTopology((1, 1, 0), (1, 1, 0), 0, 1)
-    elif kind is StructureKind.ANNULUS:
+    elif kind is StructureKind.MOBIUS_STRIP or kind is StructureKind.ANNULUS:
         base = TheoreticalTopology((1, 1, 0), (1, 1, 0), 0, 1)
     elif kind in {StructureKind.NOISE, StructureKind.BALL}:
         base = TheoreticalTopology((1, 0, 0), (1, 0, 0), 0, 1)
@@ -111,8 +109,8 @@ def theoretical_topology(
         raise GeneratorError(f"unsupported structure: {kind.value!r}")
 
     return TheoreticalTopology(
-        betti_z2=_normalize_betti(base.betti_z2, max_dim),
-        betti_q=_normalize_betti(base.betti_q, max_dim),
+        betti_z2=_normalize_betti([v * copies for v in base.betti_z2], max_dim),
+        betti_q=_normalize_betti([v * copies for v in base.betti_q], max_dim),
         genus=base.genus * copies,
         n_components=base.n_components * copies,
     )
@@ -128,7 +126,9 @@ def _unit_vector(ambient_dim: int, rng: np.random.Generator) -> np.ndarray:
     return vector / norm
 
 
-def _embed_orthonormal(points: np.ndarray, ambient_dim: int, rng: np.random.Generator) -> np.ndarray:
+def _embed_orthonormal(
+    points: np.ndarray, ambient_dim: int, rng: np.random.Generator
+) -> np.ndarray:
     if points.ndim != 2:
         raise GeneratorError("points must be a two-dimensional array")
     intrinsic_dim = points.shape[1]
@@ -146,7 +146,9 @@ def _center(points: np.ndarray) -> np.ndarray:
     return points - points.mean(axis=0, keepdims=True)
 
 
-def _area_uniform_torus_v(n: int, rng: np.random.Generator, major: float, minor: float) -> np.ndarray:
+def _area_uniform_torus_v(
+    n: int, rng: np.random.Generator, major: float, minor: float
+) -> np.ndarray:
     accepted: list[float] = []
     max_density = major + minor
     while len(accepted) < n:
@@ -408,8 +410,7 @@ def _separate_chunks(
     if len(chunks) == 1:
         return chunks[0]
     extent = max(
-        float(np.max(np.linalg.norm(chunk - chunk.mean(axis=0), axis=1)))
-        for chunk in chunks
+        float(np.max(np.linalg.norm(chunk - chunk.mean(axis=0), axis=1))) for chunk in chunks
     )
     separation = max(2.5 * extent, 0.5)
     direction = _unit_vector(chunks[0].shape[1], rng)
@@ -438,10 +439,7 @@ def _apply_transform(points: np.ndarray, spec: DatasetSpec) -> np.ndarray:
         rz = np.array(
             [[math.cos(az), -math.sin(az), 0], [math.sin(az), math.cos(az), 0], [0, 0, 1]]
         )
-        if out.shape[1] == 2:
-            rotation = rz[:2, :2]
-        else:
-            rotation = rz @ ry @ rx
+        rotation = rz[:2, :2] if out.shape[1] == 2 else rz @ ry @ rx
         dim = min(3, out.shape[1])
         out[:, :dim] = out[:, :dim] @ rotation[:dim, :dim].T
 
@@ -493,6 +491,7 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
         genus=spec.genus,
         copies=spec.copies,
         params=spec.params,
+        max_dim=spec.filtration.max_dim,
     )
 
     if spec.copies == 1:
@@ -500,10 +499,7 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     else:
         counts = np.full(spec.copies, spec.n_points // spec.copies, dtype=int)
         counts[: spec.n_points % spec.copies] += 1
-        chunks = [
-            _single_cloud(spec, base_kind, int(count), rng)
-            for count in counts
-        ]
+        chunks = [_single_cloud(spec, base_kind, int(count), rng) for count in counts]
         points = _separate_chunks(chunks, rng)
 
     points = _center(points)
@@ -511,7 +507,9 @@ def generate_point_cloud(spec: DatasetSpec) -> GeneratedPointCloud:
     if not np.all(np.isfinite(points)):
         raise GeneratorError("generated point cloud contains non-finite coordinates")
 
-    structure_name = STRUCTURE_LABELS[base_kind if spec.structure is StructureKind.DISJOINT else spec.structure]
+    structure_name = STRUCTURE_LABELS[
+        base_kind if spec.structure is StructureKind.DISJOINT else spec.structure
+    ]
     if spec.copies > 1:
         structure_name = f"{spec.copies} x {structure_name}"
     if spec.structure is StructureKind.DISJOINT:

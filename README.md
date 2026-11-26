@@ -9,18 +9,76 @@ Kernidee:
 1. Punktwolken aus bekannten topologischen Strukturen erzeugen.
 2. Punktwolken als Zahlensequenz tokenisieren.
 3. Ein kleines, vollständig selbst implementiertes Transformer-Modell von
-   Grund auf trainieren, z. B. auf `...=betti(1,4,1)<eot>`.
-4. Mit linearen Probes, Aktivierungs-Heatmaps, Attention-Maps und
-   Ablationen untersuchen, wo und wie topologische Information im Modell
-   repräsentiert ist.
+   Grund auf trainieren.
+4. Mit linearen Probes, Aktivierungs-Heatmaps, Attention-Maps, Ablationen und
+   Activation Patching untersuchen, wo und wie topologische Information im
+   Modell repräsentiert ist.
 5. Strukturen rotieren, strecken, twisten, verrauschen und die Invarianz
    sowie Out-of-Distribution-Generalisation messen.
 6. Filtrationen und persistente Homologie explizit sichtbar und
    konfigurierbar machen.
 
-Das ist ausdrücklich **kein Fine-Tuning von GPT-2 oder einem anderen
-fremden Modell**. Das Modell, der Tokenizer, die Initialisierung und die
-Trainingsschleife werden projektspezifisch implementiert.
+Das ist ausdrücklich **kein Fine-Tuning von GPT-2 oder einem anderen fremden
+Modell**. Modell, Tokenizer, Initialisierung und Trainingsschleife werden
+projektspezifisch implementiert.
+
+Die Web-Oberfläche ist auf Englisch; Konzepte und Dokumentation sind deutsch.
+
+## Schnellstart
+
+```bash
+python3 app.py
+```
+
+Beim ersten Start:
+
+1. `app.py` prüft, ob `uv` vorhanden ist.
+2. Falls nötig, wird `uv` per `pip --user` installiert. Es wird kein
+   `curl | sh` stillschweigend ausgeführt.
+3. `uv run --project .` installiert die Abhängigkeiten in eine lokale
+   Umgebung.
+4. Der Server startet und öffnet den Browser.
+
+Alternativ:
+
+```bash
+uv run app.py
+uv run app.py --no-browser --port 8000
+```
+
+## Aktueller Stand
+
+**Phase 0 - Data Foundation ist implementiert.**
+
+Enthalten:
+
+- automatischer uv-Bootstrap über `python3 app.py`,
+- FastAPI-Server mit Browser-GUI,
+- eigener Ziffern-/Zahlen-Tokenizer,
+- konfigurierbares Zielgruppen-Schema,
+- 12 Punktwolken-Generatoren,
+- Transformationen: Rotation, anisotrope Streckung, Twist, Translation,
+  Rauschen, Permutation,
+- Alpha-Komplex und Vietoris-Rips,
+- Persistenzdiagramme, Betti-Zahlen und Betti-Kurven,
+- automatische Wahl eines Filtrationsskalenpunkts,
+- Z2 und Z3 als Q-Proxy,
+- Live-3D-Punktwolke, Persistenzplot, Betti-Kurven, Zielvektor und
+  Tokenstrom,
+- Temml-gestützte Gleichungsansicht,
+- pytest-Suite und GitHub-Actions-CI.
+
+Noch nicht enthalten:
+
+- das eigene Transformer-Modell,
+- Training, Checkpoints und Optimierer,
+- lineare Probes und Heatmaps,
+- Ablation und Activation Patching,
+- bedingte Punktwolkengenerierung,
+- Betti-Kurven als Trainingsziel,
+- exakte Q-Berechnung.
+
+Aktueller Testlauf: **65 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -33,31 +91,28 @@ muss in testbare Teilbehauptungen zerlegt werden:
   Strukturtyp, Genus, Anzahl der Komponenten oder Betti-Zahlen?
 - **Invarianz:** Bleibt diese Information unter Rotation, Translation,
   Skalierung, Streckung, Twist, Punktpermutation und Rauschen erhalten?
-- **Kausalität:** Sind die gefundenen Richtungen/Neuronen tatsächlich
-  notwendig? Das testen wir mit Ablation und Activation Patching, nicht nur
-  mit linearen Probes.
+- **Kausalität:** Sind gefundene Richtungen/Neuronen tatsächlich notwendig?
+  Das testen wir mit Ablation und Activation Patching, nicht nur mit
+  linearen Probes.
 
-Wichtig: Eine lineare Probe zeigt **Information**, nicht automatisch
-**Nutzung** oder **kausale Repräsentation**.
+Eine lineare Probe zeigt **Information**, nicht automatisch **Nutzung** oder
+**kausale Repräsentation**.
 
 ### Betti-Zahlen allein sind nicht die ganze Topologie
 
 Für eine endliche Punktwolke gibt es ohne Filtration keine eindeutigen
-Betti-Zahlen. Deshalb unterscheidet das Projekt zwei Zieltypen:
+Betti-Zahlen. Deshalb unterscheidet das Projekt explizit:
 
 - **Generator-Label:** Die theoretische Topologie der erzeugten Struktur,
-  z. B. geschlossener Torus `(b0,b1,b2)=(1,2,1)`.
-- **PH-Label:** Die aus einer expliziten Filtration berechnete Topologie,
-  z. B. Vietoris-Rips- oder Alpha-Komplex bei einem gewählten Radius bzw.
-  die Betti-Kurve `b_k(epsilon)` oder das Persistenzdiagramm.
+  z. B. geschlossener Torus `(1,2,1)`.
+- **PH-Label:** Die aus der konkreten Punktwolke und einer Filtration
+  berechnete Topologie.
 
-Beide Labels werden gespeichert und in der GUI vergleichbar gemacht. So
-sehen wir, ob das Modell die erzeugende Struktur oder nur die konkrete
-Stichprobe bzw. den Filtrationsradius gelernt hat.
+Beide Werte werden getrennt gespeichert und in der GUI verglichen. So sehen
+wir, ob das Modell die erzeugende Struktur oder nur die konkrete Stichprobe
+bzw. den Filtrationsradius gelernt hat.
 
-### Wichtige Beispiele für Zielwerte
-
-Geschlossene orientierbare Fläche vom Genus `g`:
+Beispiele geschlossener orientierbarer Flächen vom Genus `g`:
 
 ```text
 b0 = 1
@@ -65,451 +120,282 @@ b1 = 2g
 b2 = 1
 ```
 
-Damit:
-
 ```text
-Kreis                 (1, 1, 0)
-Sphäre                (1, 0, 1)
-Torus                 (1, 2, 1)
-Doppeltorus, Genus 2  (1, 4, 1)
-Dreifachtorus, Genus 3(1, 6, 1)
+Kreis                  (1, 1, 0)
+Sphäre                 (1, 0, 1)
+Torus                  (1, 2, 1)
+Doppeltorus, Genus 2   (1, 4, 1)
+Dreifachtorus, Genus 3 (1, 6, 1)
 ```
 
-Zwei disjunkte Tori:
+Zwei disjunkte Tori: `(2,4,2)`. Fünf disjunkte Genus-2-Flächen: `(5,20,5)`.
+
+"5 Doppeltori" wird als fünf getrennte Genus-2-Komponenten umgesetzt. Eine
+einzelne zusammenhängende Genus-2-Fläche entsteht über `genus=2` und
+`copies=1`.
+
+## Zielformat
+
+Es gibt kein `=` im Trainingsstring. Ein explizites Grenz-Token trennt
+Eingabe und Ziel. Default:
 
 ```text
-(2, 4, 2)
+<endoftext>
 ```
 
-Fünf disjunkte Doppeltori:
+Die Punktwolke steht davor, die Zielgruppen danach. Koordinaten werden mit
+`,` getrennt, Punkte mit `;`. Zielgruppen werden ebenfalls mit `;` getrennt,
+Werte innerhalb einer Gruppe mit `,`.
+
+Beispiel:
 
 ```text
-(5, 20, 5)
+1.2,3.4,5.6;7.8,9.0,1.2<endoftext>1,2,1;1,3,1;1;1;0,2,0.5,2
 ```
 
-Bei nicht-orientierbaren Flächen und bei Koeffizientenfeld `Z2` müssen die
-Zahlen separat dokumentiert werden. Ripser rechnet standardmäßig über `Z2`.
+Default-Reihenfolge der Zielgruppen:
 
-Außerdem: "5 Doppeltori" kann bedeuten:
+| Gruppe | Felder | Bedeutung |
+| --- | --- | --- |
+| `betti` | `b0,b1,b2` | theoretische Generator-Topologie |
+| `ph` | `b0,b1,b2` | berechnete Topologie bei `epsilon` |
+| `genus` | `genus` | Genus bzw. Summe bei Kopien |
+| `n_components` | `n_components` | Anzahl Komponenten |
+| `filtration` | `method_code,maxdim,epsilon,field_code` | Filtrationsmetadaten |
 
-- fünf getrennte Doppeltorus-Komponenten, oder
-- eine verbundene Struktur mit fünf Henkeln.
-
-Das ändert die Betti-Zahlen. Diese Unterscheidung muss im Generator und in
-der GUI explizit sein.
-
-## Systemarchitektur
+Codes:
 
 ```text
-Browser
-  |
-  |  HTML/CSS/JS, Plotly, Temml
-  v
-FastAPI + WebSocket
-  |
-  +-- Data Studio
-  |     +-- Struktur-Katalog
-  |     +-- Sampling
-  |     +-- Transformationen
-  |     +-- Filtration / persistente Homologie
-  |
-  +-- Model Lab
-  |     +-- Custom Tokenizer
-  |     +-- Custom Transformer
-  |     +-- Initialisierung / Seeds
-  |
-  +-- Training
-  |     +-- Subprozess, Live-Logs, Checkpoints
-  |     +-- Optimizer, LR, Batch, Split, Early Stopping
-  |
-  +-- Interpretability
-  |     +-- Lineare Probes
-  |     +-- Aktivierungs- und Neuron-Heatmaps
-  |     +-- Attention-Maps
-  |     +-- Latent-Projektionen
-  |     +-- Ablation / Activation Patching
-  |
-  +-- Evaluation
-        +-- Test-Set, OOD-Transformationen
-        +-- Betti-MAE, Exact Match, Probe-Accuracy
+method: alpha=0, rips=1
+field:  Z2=2, Z3=3
 ```
 
-### Geplante Projektstruktur
+Die Reihenfolge und Auswahl der Gruppen ist in der GUI konfigurierbar. Die
+Felder innerhalb einer Gruppe sind fest definiert. Das Modell lernt die
+Reihenfolge aus dem Trainingslauf; die GUI zeigt sie explizit an.
+
+Optional zuschaltbar sind `structure_id`, `n_points` und `ambient_dim`.
+`structure_id` ist ein numerischer Klassenindex.
+
+## Tokenizer
+
+Der Tokenizer ist bewusst klein und domänenspezifisch:
 
 ```text
-app.py                     # Bootstrap + Start
-pyproject.toml             # uv-Projekt und Abhängigkeiten
-src/llm_topology/
-  config.py                # Pydantic-Konfigurationen
-  tokenizer.py             # Ziffern-/Zahlen-Tokenizer
-  topology/
-    generators.py          # Punktwolken-Generatoren
-    transforms.py          # Rotation, Stretch, Twist, Noise
-    filtration.py          # Rips/Alpha, Betti-Kurven, Diagramme
-  model/
-    transformer.py         # eigener Transformer
-    init.py                # kontrollierbare Initialisierung
-    train.py               # Trainingsschleife
-  analysis/
-    probes.py              # lineare/ridge/logistische Probes
-    attribution.py         # Aktivierungen, Ablation, Patching
-    projection.py          # PCA/UMAP/t-SNE
-  web/
-    main.py                # FastAPI
-    jobs.py                # Trainings-/Analyse-Jobs
-    static/
-  tests/
-tests/
-.github/workflows/ci.yml
-```
-
-## Automatischer Start mit uv
-
-Ziel:
-
-```bash
-python3 app.py
-```
-
-Ablauf:
-
-1. `app.py` prüft, ob es bereits in einer uv-Umgebung läuft.
-2. Falls nicht, wird per `os.execvp` zu `uv run` gewechselt.
-3. `uv` installiert bei Bedarf Python-Abhängigkeiten in eine lokale
-   Umgebung.
-4. Der Server startet und öffnet den Browser.
-5. Ein Umgebungsflag verhindert eine Endlosschleife beim Neustart.
-
-Falls `uv` noch nicht vorhanden ist, gibt der Bootstrap eine klare
-Installationsanweisung aus. Ein automatisches `curl | sh` wird aus
-Sicherheitsgründen nicht stillschweigend ausgeführt.
-
-## Tokenizer und Sequenzgrammatik
-
-Der Tokenizer ist bewusst klein und domänenspezifisch. Vorgesehen sind
-mindestens:
-
-```text
-0 1 2 3 4 5 6 7 8 9
-. , ; ( ) = -
-betti
-<bos> <eos> <pad>
+0 1 2 3 4 5 6 7 8 9 . , ; - ( ) =
+betti ph genus meta
+<pad> <bos> <eos> <endoftext> <infer> <generate> <unk>
 ```
 
 Jede Ziffer ist ein eigenes Token. Zahlen werden als Dezimalstrings
-serialisiert. Ein mögliches Format ist:
+serialisiert. `betti`, Klammern und `=` bleiben für spätere Grammatiken und
+Vergleichsmodi im Vokabular, auch wenn das aktuelle Zielformat sie nicht
+verwendet.
 
-```text
-<bos>1.23,4.56,7.89;2.00,3.10,4.20;...=betti(1,4,1)<eos>
-```
+## Punktwolken und Topologien
 
-Dabei trennt:
-
-- `,` Koordinaten innerhalb eines Punktes und Werte innerhalb von `betti`,
-- `;` Punkte,
-- `=` Eingabe und Ziel,
-- `betti(...)` das Ziel.
-
-Offene Designfrage: Sollen Koordinaten zusätzlich als kontinuierliche
-Vektoren embeddings bekommen, oder soll das Modell ausschließlich über
-Ziffern-Tokens arbeiten? Für die Treue zur Idee ist die Ziffernvariante
-Default; ein numerischer Baseline-Modus ist für Vergleichsexperimente
-sinnvoll.
-
-## Modell
-
-Geplant ist ein kleiner, vollständig eigener Decoder-only-Transformer:
-
-- kausale Self-Attention,
-- konfigurierbare Layer, Heads, `d_model`, FFN-Breite,
-- konfigurierbare Aktivierung (GELU, SiLU/SwiGLU),
-- Pre-LayerNorm oder Post-LayerNorm,
-- optionale gelernte Positionen oder RoPE,
-- eigene Initialisierung: Normal, Xavier, orthogonal, uniform, zero,
-  reproduzierbar über Seeds, optional pro Schicht überschreibbar,
-- keine vortrainierten Gewichte,
-- Token-Embedding und Ausgabekopf exakt für den eigenen Tokenizer.
-
-Zwei Betriebsmodi sind denkbar:
-
-1. **Autoregressives LLM:** erzeugt `betti(...)` als Text. Das entspricht
-   der gewünschten Form am direktesten.
-2. **Auxiliäre Klassifikationsköpfe:** zusätzliche Köpfe für Strukturtyp,
-   Genus, Anzahl Komponenten und Betti-Zahlen. Sie erleichtern Probes und
-   Diagnose, ersetzen aber nicht die generative Ausgabe.
-
-Für Permutationsinvarianz wird die Reihenfolge der Punkte trainiert
-randomisiert. Zusätzlich kann die Positionseinbettung für den
-Punktwolken-Teil abgeschaltet werden. Das ist ein eigenes Experiment, weil
-es die Architektur und Interpretierbarkeit verändert.
-
-## Daten und Topologien
-
-Der Katalog wird schrittweise erweitert. Sinnvolle erste Klassen:
+Implementierter Katalog:
 
 - Kreis / S1
 - Sphäre / S2
 - Torus / T2
-- Doppeltorus / Genus 2
-- Dreifachtorus / Genus 3
-- mehrere disjunkte Kopien
-- verschachtelte oder verkettete Kreise
-- Acht (wedge of circles)
-- Annulus
+- Genus-g-Fläche (über verschmolzene Tori)
+- disjunkte Kopien
+- verkettete Ringe (Hopf link)
+- Acht / Figure Eight
+- Kleinsche Flasche (4D-Einbettung, Z2)
 - Möbiusband
-- Kleinsche Flasche (Einbettung in 4D, Z2-Koeffizienten)
-- projektive Ebene
-- Zufallsrauschen / kontrahierbare Wolke als Negativkontrolle
-
-Konfigurierbar pro Struktur:
-
-- Anzahl der Instanzen,
-- Anzahl der Punkte,
-- intrinsische Dimension,
-- Ambient-Dimension (2D, 3D, 4D, ...),
-- Sampling-Verfahren,
-- Rauschen,
-- Skalierung,
-- Rotation,
-- anisotrope Streckung,
-- Twist,
-- Verschiebung,
-- Seed.
-
-Die GUI soll natürlichsprachige Presets anbieten, z. B.
-"5 Doppeltori, 300 Punkte, 3D, 2% Rauschen", aber intern immer in eine
-explizite, reproduzierbare Konfiguration übersetzen.
-
-## Filtration und persistente Homologie
-
-Geplante Verfahren:
-
-- **Vietoris-Rips:** allgemein, aber teuer bei vielen Punkten und hoher
-  Homologiedimension.
-- **Alpha-Komplex:** für euklidische Punktwolken in niedriger Dimension
-  effizienter; abhängig von Delaunay-Komplex.
-- **Gewichtete/angepasste Filtrationen:** später, um Strukturen gezielt zu
-  betonen.
-
-Für jede Punktwolke werden gespeichert:
-
-- Distanzmatrix,
-- Persistenzdiagramme pro Dimension,
-- Betti-Kurven `b_k(epsilon)`,
-- optional Repräsentanten von Homologieklassen,
-- Geburts-/Todesradien.
-
-Die GUI zeigt interaktiv:
-
-- Punktwolke in 3D,
-- filtrierte Simplizes bei variablem `epsilon`,
-- Betti-Kurven,
-- Persistenzdiagramm,
-- Vergleich Generator-Label vs. PH-Label.
-
-## Training und Evaluation
+- Annulus
+- Rauschen
+- Vollkugel
 
 Konfigurierbar:
 
-- Train/Validation/Test-Split, auch gruppiert nach Strukturinstanz,
-- Batch-Größe,
-- Epochen,
-- Optimizer (AdamW, Adam, SGD),
-- Learning Rate, Weight Decay, Warmup, Scheduler,
-- Dropout,
-- Gradient Clipping,
-- Early Stopping,
+- Anzahl Punkte,
+- Ambient-Dimension,
+- Kopien,
+- Genus,
 - Seed,
-- Checkpoint-Intervall,
-- Gerät (CPU/CUDA/MPS, automatische Erkennung).
+- Rotation,
+- anisotrope Streckung,
+- Twist,
+- Translation,
+- Rauschen,
+- Punktpermutation.
 
-Wichtige Evaluationsachsen:
+Es gibt keine kleinen künstlichen Obergrenzen. Ein lokales Safety-Envelope
+von 100.000 Punkten verhindert versehentliche OOM-Runs; oberhalb von 2.000
+Punkten erscheinen Warnungen. Höhere Ambient-Dimensionen und
+Homologiedimensionen sind erlaubt, werden aber als teuer markiert.
 
-- Betti-Zahlen exakt,
-- mittlerer absoluter Fehler pro Betti-Komponente,
-- Strukturklassifikation,
-- Generalisierung auf ungesehene Punktanzahl,
-- Generalisierung auf ungesehene Ambient-Dimension,
-- Generalisierung auf ungesehene Strukturen,
-- Invarianz unter Transformationen,
-- lineare Probe-Accuracy pro Layer,
-- kausale Ablationseffekte.
+**Bekannte Einschränkung:** Die Genus-g-Fläche wird als Punktwolke auf der
+Oberfläche verschmolzener Tori erzeugt. Das theoretische Label ist korrekt,
+aber Alpha-Komplexe auf endlichen, verrauschten Oberflächenstichproben
+können zusätzliche kurze H1/H2-Klassen zeigen. Genau dieser Unterschied
+zwischen Generator- und PH-Label ist Teil des Experiments.
 
-Train/Test-Trennung muss nach **Instanz** und nicht nur nach Punktwolke
-erfolgen. Sonst lernt das Modell möglicherweise fast identische
-Nachbarstichproben auswendig.
+## Filtration und persistente Homologie
+
+Default: **Alpha-Komplex**. Optional: **Vietoris-Rips**.
+
+Alpha-Filtrationswerte sind intern quadratische Radien; die API gibt Radien
+zurück. Rips verwendet Distanzen.
+
+Gespeichert und visualisiert:
+
+- Persistenzdiagramme pro Dimension,
+- Betti-Zahlen am gewählten `epsilon`,
+- Betti-Kurven über einen Radius-Grid,
+- Geburts-/Todeswerte,
+- Warnungen bei unendlichen positiven Klassen.
+
+Die automatische Epsilon-Wahl ist ein bewusst einfacher, reproduzierbarer
+Heuristik-Start:
+
+1. Falls eine signifikante H2-Klasse existiert, wähle deren Intervallmitte.
+2. Sonst wähle die längste signifikante H1-Klasse.
+3. Sonst falle auf einen Bruchteil des Filtrationsbereichs zurück.
+
+Das ist kein universeller topologischer Schätzer. Die GUI erlaubt deshalb
+jederzeit manuelles `epsilon`.
+
+**Koeffizienten:** Z2 ist der Default. Z3 dient als Q-ähnlicher
+Vergleichskörper, ist aber **keine exakte Q-Berechnung**. Für orientierbare
+Flächen sind die Werte gleich; für nicht-orientierbare Flächen zeigt Z3 das
+Q-Verhalten, aber Torsion kann in anderen Räumen abweichen. Exaktes Q ist
+für eine spätere Phase vorgesehen.
+
+## Geplantes Modell
+
+Vollständig eigener Decoder-only-Transformer:
+
+- kausale Self-Attention,
+- konfigurierbare Layer, Heads, `d_model`, FFN-Breite,
+- GELU oder SiLU/SwiGLU,
+- Pre- oder Post-LayerNorm,
+- gelernte Positionen oder RoPE,
+- eigene Initialisierung: Normal, Xavier, orthogonal, uniform, zero,
+  reproduzierbar über Seeds und pro Schicht überschreibbar,
+- keine vortrainierten Gewichte,
+- eigener Token-Embedding- und Ausgabekopf.
+
+Das Modell wird von Anfang an **multitasking** trainiert:
+
+1. **Inferenz:** Punktwolke + `<endoftext>` + Zielgruppen.
+2. **Generierung:** Zielgruppen + `<endoftext>` + Punktwolke.
+3. **Auxiliäre Köpfe:** Strukturtyp, Genus, Komponenten, Betti-Zahlen.
+4. **Trainingsziele:** Cross-Entropy, Ranking/Kontrastivloss und
+   Multiple-Choice parallel.
+
+Die genaue Gewichtung und die Frage, ob Generierung zuerst nur als
+denoising-/autoencodingartige Aufgabe trainiert wird, ist eine
+Phase-1-Entscheidung.
 
 ## Interpretierbarkeit
 
-### Lineare Probes
+Geplant:
 
-Pro Layer, Token-Position und Zielgröße:
-
-- Ridge-Regression für kontinuierliche Ziele (Genus, Betti-Zahlen),
-- logistische Regression für Klassen (Strukturtyp, Anzahl Komponenten),
-- Kreuzvalidierung,
-- `R^2`, Accuracy, Konfusionsmatrix.
-
-Visualisierung:
-
-- Layer × Zielgröße Heatmap,
+- Ridge-/logistische Probes pro Layer und Token-Position,
 - Probe-Gewichte als Neuron × Zielgröße Heatmap,
-- Top-N Neuronen pro Konzept,
-- Vergleich Original vs. transformierte Struktur.
-
-### Neuronale und attentionale Lokalisierung
-
-- Aktivierungs-Heatmaps: Layer × Token, Layer × Neuron.
-- Attention-Maps: Head × Token, inklusive Zuordnung der Tokens zu
-  Koordinaten und Punkten.
-- FFN-Neuronen: Aktivierungsstatistik pro Strukturklasse.
-- Ablation einzelner Neuronen/Heads mit Effekt auf Betti-Vorhersage.
-- Activation Patching zwischen z. B. Torus und Doppeltorus.
-
-### Latente Projektion
-
-- PCA (schnell, deterministisch) als Default,
-- UMAP/t-SNE optional,
-- 2D/3D-Scatter, gefärbt nach Struktur, Genus, Betti, Transformation,
-  Split oder Vorhersagefehler,
+- Aktivierungs-Heatmaps Layer × Token und Layer × Neuron,
+- Attention-Maps mit Zuordnung zu Koordinaten und Punkten,
+- FFN-Neuronen-Aktivierungen pro Strukturklasse,
+- Ablation einzelner Neuronen/Heads,
+- Activation Patching zwischen Strukturen und Transformationen,
+- PCA/UMAP-Projektionen des Residualstreams,
 - Trajektorien über Trainingsschritte.
 
-Wichtig: t-SNE/UMAP sind Visualisierungen, keine Beweise für topologische
-Struktur. Deshalb werden sie immer zusammen mit quantitativen Probes
-gezeigt.
+t-SNE/UMAP sind Visualisierungen, keine Beweise. Sie werden immer zusammen
+mit quantitativen Probes und kausalen Tests gezeigt.
 
 ## GUI
 
+Die aktuelle Data-Studio-Ansicht bietet:
+
+- Strukturkatalog und Live-Parameter,
+- Transformationsregler,
+- Filtrationseinstellungen,
+- konfigurierbare Zielgruppen,
+- 3D-Punktwolke (PCA-Projektion bei mehr als 3 Dimensionen),
+- Persistenzdiagramm,
+- Betti-Kurven,
+- theoretische vs. berechnete Betti-Zahlen,
+- kanonischen Zielstring und vollständigen Modell-Input,
+- Tokenstrom mit Token-IDs,
+- Temml-Gleichungen mit Live-Werten,
+- Warnungen und graceful Fehlerbehandlung.
+
 Geplante Ansichten:
 
-1. **Data Studio**
-   - Strukturkatalog, Presets, natürliche Spracheingabe,
-   - Live-Punktwolke,
-   - Filtration, Betti-Kurven, Persistenzdiagramm,
-   - Transformationsregler,
-   - Generator vs. PH-Label.
+- Model Lab mit Architekturreglern und Parameterzahl,
+- Training-Dashboard mit Live-Loss und Checkpoints,
+- Interpretability-Dashboard mit Probes, Heatmaps, Attention und Ablation,
+- Evaluation mit OOD- und Invarianzmatrix,
+- interaktiver Equation Explorer.
 
-2. **Model Lab**
-   - Architekturregler,
-   - Parameterzahl,
-   - Initialisierung und Seeds,
-   - Tokenizer-Vorschau,
-   - interaktive Gleichungen mit Temml,
-   - Shape-/FLOP-Vorschau.
+## Entwicklung
 
-3. **Training**
-   - Live-Loss, LR, Accuracy,
-   - generierte Beispiele,
-   - Checkpoints,
-   - Stop/Pause/Resume,
-   - Log-Konsole.
+```bash
+uv sync --extra dev
+uv run pytest
+uv run ruff check src tests app.py
+uv run ruff format --check src tests app.py
+```
 
-4. **Interpretability**
-   - Probe-Dashboard,
-   - Heatmaps,
-   - Attention-Maps,
-   - Latent-3D,
-   - Neuron Explorer,
-   - Ablation/Patching.
+Projektstruktur:
 
-5. **Evaluation**
-   - Testmetriken,
-   - OOD-Transformationen,
-   - Invarianzmatrix,
-   - Fehlerbeispiele,
-   - Export als JSON/CSV.
+```text
+app.py                         uv-Bootstrap und Serverstart
+pyproject.toml                  uv-Projekt
+src/llm_topology/
+  config.py                     Pydantic-Konfigurationen
+  tokenizer.py                  Ziffern-/Zahlen-Tokenizer
+  pipeline.py                   Generate -> PH -> Ziele -> Sequenz
+  topology/
+    generators.py               Punktwolken-Generatoren
+    filtration.py               Alpha/Rips, Diagramme, Betti-Kurven
+    labels.py                   Zielgruppen und Schema
+  web/
+    main.py                     FastAPI
+    templates/index.html        Data Studio
+    static/style.css            Dark-Lab-Design
+    static/app.js               Interaktion und Plotly
+tests/                          pytest-Suite
+.github/workflows/ci.yml        GitHub Actions
+```
 
-6. **Equation Explorer**
-   - Tokenizer,
-   - Attention,
-   - FFN,
-   - LayerNorm/Residual,
-   - Loss,
-   - Vietoris-Rips-Komplex,
-   - Betti-Zahlen,
-   - Persistenz,
-   - lineare Probe,
-   - jeweils mit live berechneten Beispielwerten und Sliders.
+CI führt Ruff, Formatcheck und pytest aus.
 
-## Ästhetik
+## Grenzen und Risiken
 
-- dunkles, hochwertiges Labor-Interface,
-- großzügige Typografie,
-- Plotly für interaktive 2D/3D-Plots,
-- Temml für Formeln,
-- konsistente Farbcodierung für Betti-Dimensionen und Strukturklassen,
-- keine dekorativen Elemente, die Daten verdecken,
-- responsiv, aber primär für Desktop.
-
-## Test Driven Development
-
-Geplante erste Tests:
-
-- Tokenizer: Roundtrip, Sonderzeichen, negative Zahlen, Sonder-Tokens.
-- Generatoren: Form, Determinismus bei Seed, korrekte theoretische Labels.
-- Transformationen: Topologie-Label bleibt erhalten, Punktzahl bleibt
-  erhalten, Determinismus.
-- Filtration: Kreis erkennt H1, Sphäre erkennt H2, Torus erkennt H1 und H2
-  bei geeigneter Stichprobe und Filtrationswahl.
-- Modell: Forward-Shape, kausale Maske, Parameterzahl, reproduzierbare
-  Initialisierung.
-- Probes: synthetische linear separable Daten.
-- API: Healthcheck, Datensatz-Erzeugung, ungültige Konfiguration.
-- CI: `uv sync --dev`, `ruff`, `pytest`.
-
-Topologische Tests sind stochastisch. Sie verwenden feste Seeds und
-tolerante Schwellen, damit CI nicht flaky wird. Langsame PH-Tests werden
-markiert und können separat laufen.
-
-## Roadmap
-
-- **Phase 0:** Bootstrap, Projektgerüst, Tokenizer, Generatoren,
-  Transformationen, Filtration, Tests, CI.
-- **Phase 1:** eigener Transformer, Init-Kontrolle, Training, Checkpoints,
-  CLI-Experimente.
-- **Phase 2:** FastAPI/WebSocket, Data Studio, Model Lab, Live-Training.
-- **Phase 3:** Probes, Heatmaps, Attention-Maps, Latent-Projektion.
-- **Phase 4:** Invarianz-/OOD-Benchmarks, Ablation, Activation Patching.
-- **Phase 5:** Betti-Kurven/Persistenz als Lernziel, Equation Explorer,
-  visueller Feinschliff.
-
-## Risiken und Grenzen
-
-- Vietoris-Rips in hohen Dimensionen und mit vielen Punkten ist teuer.
-- Betti-Zahlen sind eine grobe Zusammenfassung; verschiedene Strukturen
+- Vietoris-Rips ist in hohen Dimensionen und mit vielen Punkten teuer.
+- Alpha-Komplexe haben bei degenerierten Punktwolken große
+  Filtrationswerte; die GUI kappt den sinnvollen Radiusbereich.
+- Betti-Zahlen sind eine grobe Zusammenfassung. Verschiedene Strukturen
   können dieselben Betti-Zahlen haben.
 - Ein Modell kann Generatorparameter statt Topologie lernen.
 - Lineare Probes können Scheinkorrelationen zeigen.
-- Punktwolken mit endlicher Stichprobe und Rauschen haben keine saubere
-  Topologie ohne Filtrationsentscheidung.
-- Sehr lange Zahlenfolgen erhöhen Kontextlänge und Trainingskosten.
-- Permutationsinvarianz ist bei sequenzieller Tokenisierung nicht
-  automatisch gegeben.
-- "Stunning" darf nicht auf Kosten von Reproduzierbarkeit und
-  wissenschaftlicher Aussagekraft gehen.
+- Endliche, verrauschte Stichproben haben keine saubere Topologie ohne
+  Filtrationsentscheidung.
+- Punktpermutation ist bei sequenzieller Tokenisierung nicht automatisch
+  invariant; Permutationsaugmentation ist eingeplant.
+- Der Ziffern-Tokenizer erzeugt lange Sequenzen. 240 Punkte in 3D koennen
+  leicht 7.000+ Tokens ergeben. Kontextlaenge, Koordinatenpraezision und
+  Punktbudget muessen in Phase 1 gemeinsam kalibriert werden.
+- Die Genus-g-Punktwolke über verschmolzene Tori ist topologisch motiviert,
+  aber die PH-Signatur kann durch die diskrete Oberfläche verrauscht sein.
+- Z3 ist nur ein Q-Proxy.
 
-## Offene Fragen
+## Nächste offene Entscheidungen für Phase 1
 
-Die wichtigsten Entscheidungen, die vor der ersten Implementierung geklärt
-werden sollten:
-
-1. Soll das erste Modell zwingend autoregressiv `betti(...)` generieren,
-   oder ist ein Encoder mit Klassifikationsköpfen als erste Stufe okay?
-2. Sind mit "Doppeltorus" zwei getrennte Tori oder eine zusammenhängende
-   Genus-2-Fläche gemeint?
-3. Sollen die Trainingslabels theoretische Generator-Labels, PH-Labels oder
-   beide sein?
-4. Welche Filtration ist Default: Vietoris-Rips, Alpha-Komplex oder beides?
-5. Soll das Modell statische Betti-Zahlen, Betti-Kurven oder
-   Persistenzdiagramme vorhersagen?
-6. Welche Strukturen sind für den ersten Katalog Pflicht?
-7. Soll der Tokenizer ausschließlich Ziffern-Tokens nutzen, oder zusätzlich
-   numerische Embeddings für ein Vergleichsexperiment?
-8. Wie viele Punkte, welche Ambient-Dimensionen und welche
-   Kontextlängen sind realistisch?
-9. Soll die GUI zuerst funktional oder zuerst visuell poliert werden?
-10. Welche Invarianz-Tests sind Pflicht: Rotation, Streckung, Twist,
-    Translation, Skalierung, Permutation, Rauschen?
-11. Soll es echte kausale Tests (Ablation/Patching) von Anfang an geben?
-12. Gibt es eine GPU? Falls nein, muss die Standardkonfiguration auf CPU
-    laufen.
+1. Soll die bedingte Punktwolkengenerierung zuerst als reine
+   Sequenzgenerierung oder als separater Decoder-Kopf umgesetzt werden?
+2. Welche Default-Modellgröße ist auf CPU sinnvoll?
+3. Soll `structure_id` numerisch oder alphanumerisch tokenisiert werden?
+4. Soll die Trainingsreihenfolge der Zielgruppen frei permutierbar sein oder
+   pro Run fixiert bleiben?
+5. Wie wird exaktes Q für kleine Komplexe berechnet: rationale
+   Gauß-Elimination, Gudhi-Erweiterung oder externe Bibliothek?
+6. Sollen benutzerdefinierte Python-Snippets über AST-Whitelists oder nur
+   als lokal vertrauenswürdiger Subprozess laufen?
+7. Welche Gleichungen müssen im Equation Explorer zuerst interaktiv werden?

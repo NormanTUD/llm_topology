@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-
 from ..config import (
     FIELD_CODES,
     METHOD_CODES,
@@ -10,7 +8,6 @@ from ..config import (
     PersistenceSummary,
     TargetSchema,
 )
-from .generators import GeneratorError
 
 
 class TargetBuildError(ValueError):
@@ -100,9 +97,7 @@ def schema_for_max_dim(schema: TargetSchema, max_dim: int) -> TargetSchema:
 
 
 def target_blocks_hint(schema: TargetSchema) -> str:
-    return " | ".join(
-        f"{block.name}: {', '.join(block.fields)}" for block in schema.blocks
-    )
+    return " | ".join(f"{block.name}: {', '.join(block.fields)}" for block in schema.blocks)
 
 
 def build_dataset_response(

@@ -73,7 +73,9 @@ class NumericTokenizer:
             match = self._scanner.match(text, position)
             if match is None:
                 if strict:
-                    raise TokenizerError(f"unsupported character at position {position}: {text[position]!r}")
+                    raise TokenizerError(
+                        f"unsupported character at position {position}: {text[position]!r}"
+                    )
                 out.append("<unk>")
                 position += 1
                 continue
@@ -149,8 +151,7 @@ def serialize_target_groups(groups: Sequence[Sequence[float]], *, precision: int
     if not groups:
         raise TokenizerError("target must contain at least one group")
     return ";".join(
-        ",".join(format_number(value, precision=precision) for value in group)
-        for group in groups
+        ",".join(format_number(value, precision=precision) for value in group) for group in groups
     )
 
 

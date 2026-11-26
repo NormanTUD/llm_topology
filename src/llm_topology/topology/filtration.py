@@ -8,10 +8,10 @@ import numpy as np
 from ripser import ripser
 
 from ..config import (
+    PRIME_BY_FIELD,
     CoefficientField,
     FiltrationMethod,
     FiltrationSpec,
-    PRIME_BY_FIELD,
     PersistenceSummary,
 )
 
@@ -69,19 +69,23 @@ def _alpha_diagrams(
         if dimension > max_dim:
             continue
         birth_radius = math.sqrt(max(float(birth), 0.0))
-        death_radius = None if not math.isfinite(float(death)) else math.sqrt(max(float(death), 0.0))
+        death_radius = (
+            None if not math.isfinite(float(death)) else math.sqrt(max(float(death), 0.0))
+        )
         diagrams[dimension].append((birth_radius, death_radius))
     for dimension, diagram in enumerate(diagrams):
         diagrams[dimension] = sorted(diagram, key=lambda item: item[0])
 
     if field is CoefficientField.Z3:
-        warnings.append("Z3 is used as a Q-like comparison field; it is not an exact Q computation.")
+        warnings.append(
+            "Z3 is used as a Q-like comparison field; it is not an exact Q computation."
+        )
     if any(
-        item[1] is None
-        for dimension in range(1, len(diagrams))
-        for item in diagrams[dimension]
+        item[1] is None for dimension in range(1, len(diagrams)) for item in diagrams[dimension]
     ):
-        warnings.append("Some positive-dimensional classes are infinite; inspect the filtration range.")
+        warnings.append(
+            "Some positive-dimensional classes are infinite; inspect the filtration range."
+        )
     return diagrams, max_epsilon, warnings
 
 
@@ -125,11 +129,11 @@ def _rips_diagrams(
         diagrams[dimension] = sorted(_clean_diagram(diagram), key=lambda item: item[0])
 
     if field is CoefficientField.Z3:
-        warnings.append("Z3 is used as a Q-like comparison field; it is not an exact Q computation.")
+        warnings.append(
+            "Z3 is used as a Q-like comparison field; it is not an exact Q computation."
+        )
     if any(
-        item[1] is None
-        for dimension in range(1, len(diagrams))
-        for item in diagrams[dimension]
+        item[1] is None for dimension in range(1, len(diagrams)) for item in diagrams[dimension]
     ):
         warnings.append(
             "Some positive-dimensional Rips classes are infinite at the chosen "
@@ -206,8 +210,7 @@ def select_epsilon(
 
     for dimension in range(len(diagrams) - 1, 0, -1):
         candidates = [
-            item for item in lifetimes
-            if item[0] == dimension and item[1] >= significance
+            item for item in lifetimes if item[0] == dimension and item[1] >= significance
         ]
         if candidates:
             return float(max(candidates, key=lambda item: item[1])[3])
@@ -249,7 +252,9 @@ def compute_persistence(
     else:
         diagrams, max_epsilon, warnings = _rips_diagrams(array, spec.max_dim, spec.field, spec)
 
-    epsilon = float(spec.epsilon) if spec.epsilon is not None else select_epsilon(diagrams, max_epsilon)
+    epsilon = (
+        float(spec.epsilon) if spec.epsilon is not None else select_epsilon(diagrams, max_epsilon)
+    )
     epsilon = min(max(epsilon, 0.0), max_epsilon)
     betti = betti_at(diagrams, epsilon)
     grid = _curve_grid(diagrams, max_epsilon)
@@ -281,10 +286,7 @@ def compute_persistence(
         max_dim=spec.max_dim,
         epsilon=epsilon,
         betti=betti,
-        diagrams=[
-            [[birth, death] for birth, death in diagram]
-            for diagram in diagrams
-        ],
+        diagrams=[[[birth, death] for birth, death in diagram] for diagram in diagrams],
         finite_values=finite_values,
         epsilon_grid=[float(value) for value in grid],
         betti_curve=curve,
