@@ -46,6 +46,17 @@ uv run app.py
 uv run app.py --no-browser --port 8000
 ```
 
+Danach:
+
+- `http://127.0.0.1:8000/` öffnet das Data Studio mit Batch-Galerie,
+- `http://127.0.0.1:8000/lab` öffnet Model Lab und Training,
+- `http://127.0.0.1:8000/lab#interpret` öffnet die Probe- und Heatmap-Ansicht.
+
+Ein Trainingslauf im Model Lab startet im Hintergrund. Die Oberfläche pollt
+den Status, zeigt Live-Loss, Validierungsmetriken und generierte Samples und
+kann den Lauf stoppen. Nach dem Training startet `Run probes & maps` die
+Interpretabilitätsanalyse des besten Checkpoints.
+
 ## Aktueller Stand
 
 **Phase 0, Phase 1 und Phase 2 sind implementiert.**
