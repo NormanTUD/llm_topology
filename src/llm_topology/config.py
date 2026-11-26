@@ -184,3 +184,10 @@ class DatasetResponse(BaseModel):
     projection: list[list[float]] = Field(default_factory=list)
     projection_method: str = "first-3"
     warnings: list[str] = Field(default_factory=list)
+    notes: list[str] = Field(default_factory=list)
+
+
+class BatchDatasetResponse(BaseModel):
+    items: list[DatasetResponse]
+    warnings: list[str] = Field(default_factory=list)
+    count: int

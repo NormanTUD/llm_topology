@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .. import __version__
 from ..config import (
+    BatchDatasetResponse,
     CoefficientField,
     DatasetResponse,
     DatasetSpec,
@@ -19,6 +20,7 @@ from ..config import (
     default_target_blocks,
     optional_target_blocks,
 )
+from ..model.config import AnalysisSpec, DataBuildSpec, ModelSpec, TrainConfig, TrainingSpec
 from ..pipeline import PipelineError, generate_dataset
 from ..tokenizer import (
     DEFAULT_BOUNDARY,
@@ -29,6 +31,7 @@ from ..tokenizer import (
     serialize_target_groups,
 )
 from ..topology.generators import STRUCTURE_IDS, STRUCTURE_LABELS
+from .jobs import MANAGER, JobError
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 STATIC_DIR = PACKAGE_ROOT / "static"
@@ -81,6 +84,16 @@ class CatalogResponse(BaseModel):
     boundary_token: str
     methods: list[str]
     fields: list[str]
+    model_defaults: dict[str, object]
+    data_defaults: dict[str, object]
+    training_defaults: dict[str, object]
+    analysis_defaults: dict[str, object]
+
+
+class BatchGenerateRequest(BaseModel):
+    spec: DatasetSpec = Field(default_factory=DatasetSpec)
+    count: int = Field(default=6, ge=1, le=24)
+    structures: list[StructureKind] | None = None
 
 
 def _catalog() -> CatalogResponse:
@@ -102,7 +115,7 @@ def _catalog() -> CatalogResponse:
         for block in optional_target_blocks()
     )
     return CatalogResponse(
-        phase="Phase 0 - Data Foundation",
+        phase="Phase 1/2 - Model & Interpretability",
         version=__version__,
         structures=structures,
         default_spec=DatasetSpec().model_dump(mode="json"),
@@ -111,6 +124,10 @@ def _catalog() -> CatalogResponse:
         boundary_token=DEFAULT_BOUNDARY,
         methods=[method.value for method in FiltrationMethod],
         fields=[field.value for field in CoefficientField],
+        model_defaults=ModelSpec().model_dump(mode="json"),
+        data_defaults=DataBuildSpec().model_dump(mode="json"),
+        training_defaults=TrainConfig().model_dump(mode="json"),
+        analysis_defaults=AnalysisSpec().model_dump(mode="json"),
     )
 
 
@@ -129,6 +146,7 @@ async def health() -> dict[str, object]:
 
     import gudhi
     import numpy
+    import torch
 
     return {
         "status": "ok",
@@ -136,7 +154,10 @@ async def health() -> dict[str, object]:
         "python": platform.python_version(),
         "numpy": numpy.__version__,
         "gudhi": gudhi.__version__,
-        "phase": "Phase 0 - Data Foundation",
+        "torch": torch.__version__,
+        "cuda": torch.cuda.is_available(),
+        "mps": torch.backends.mps.is_available(),
+        "phase": "Phase 1/2 - Model & Interpretability",
     }
 
 
@@ -153,6 +174,29 @@ async def generate(spec: DatasetSpec) -> DatasetResponse:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/generate/batch", response_model=BatchDatasetResponse)
+async def generate_batch(payload: BatchGenerateRequest) -> BatchDatasetResponse:
+    items: list[DatasetResponse] = []
+    warnings: list[str] = []
+    structures = payload.structures or [payload.spec.structure]
+    for index in range(payload.count):
+        spec = payload.spec.model_copy(
+            update={
+                "seed": payload.spec.seed + index,
+                "structure": structures[index % len(structures)],
+            }
+        )
+        try:
+            items.append(generate_dataset(spec))
+        except (PipelineError, ValueError) as exc:
+            warnings.append(f"Cloud {index + 1} failed: {exc}")
+    if not items:
+        raise HTTPException(
+            status_code=422, detail="; ".join(warnings) or "batch generation failed"
+        )
+    return BatchDatasetResponse(items=items, warnings=warnings, count=len(items))
 
 
 @app.post("/api/tokenize", response_model=TokenizeResponse)
@@ -188,4 +232,52 @@ async def parse_targets(payload: ParseTargetRequest) -> ParseTargetResponse:
         groups=groups,
         target_text=canonical,
         target_schema=payload.target_schema,
+    )
+
+
+@app.post("/api/train/start")
+async def start_training(spec: TrainingSpec) -> dict[str, object]:
+    job = MANAGER.start(spec)
+    return job.snapshot(include_history=False)
+
+
+@app.get("/api/train/list")
+async def list_training_jobs() -> list[dict[str, object]]:
+    return MANAGER.list()
+
+
+@app.get("/api/train/status/{job_id}")
+async def training_status(job_id: str) -> dict[str, object]:
+    try:
+        return MANAGER.get(job_id).snapshot(include_history=True)
+    except JobError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/train/stop/{job_id}")
+async def stop_training(job_id: str) -> dict[str, object]:
+    try:
+        job = MANAGER.get(job_id)
+    except JobError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    job.stop()
+    return job.snapshot(include_history=False)
+
+
+@app.post("/api/analyze/{job_id}")
+async def analyze_job(job_id: str, spec: AnalysisSpec | None = None) -> dict[str, object]:
+    try:
+        return MANAGER.analyze(job_id, spec or AnalysisSpec())
+    except JobError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover - surfaced to the UI
+        raise HTTPException(status_code=500, detail=f"{type(exc).__name__}: {exc}") from exc
+
+
+@app.get("/lab", response_class=HTMLResponse)
+async def lab(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse(
+        request=request,
+        name="lab.html",
+        context={"catalog": _catalog().model_dump(mode="json")},
     )

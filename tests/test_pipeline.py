@@ -62,7 +62,7 @@ def test_optional_target_groups() -> None:
     assert [group[0] for group in response.target_groups] == [0.0, 40.0, 3.0]
 
 
-def test_mismatch_warning_is_present_for_noisy_sample() -> None:
+def test_mismatch_note_is_present_for_noisy_sample() -> None:
     response = generate_dataset(
         DatasetSpec(
             structure=StructureKind.TORUS,
@@ -71,7 +71,7 @@ def test_mismatch_warning_is_present_for_noisy_sample() -> None:
             transform={"noise": 0.08, "seed": 3},
         )
     )
-    assert any("differs" in warning for warning in response.warnings)
+    assert any("differ" in note for note in response.notes)
 
 
 def test_invalid_generator_is_reported_as_pipeline_error() -> None:

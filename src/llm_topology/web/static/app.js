@@ -1,6 +1,9 @@
 const state = {
   catalog: null,
   last: null,
+  batch: [],
+  selected: 0,
+  batchWarnings: [],
   equationValues: {},
 };
 
@@ -256,12 +259,24 @@ async function generate() {
   setStatus("generating");
   try {
     const spec = buildSpec();
-    const data = await fetchJSON("/api/generate", {
+    const count = clampInt($("#batch-count").value, 1, 24, 6);
+    const mix = $("#mix-structures").checked;
+    let structures = null;
+    if (mix) {
+      structures = state.catalog.structures
+        .filter((structure) => structure.value !== "disjoint")
+        .filter((structure) => structure.needs_ambient <= spec.ambient_dim)
+        .map((structure) => structure.value);
+    }
+    const data = await fetchJSON("/api/generate/batch", {
       method: "POST",
-      body: JSON.stringify(spec),
+      body: JSON.stringify({ spec, count, structures }),
     });
-    state.last = data;
-    render(data);
+    state.batch = data.items;
+    state.batchWarnings = data.warnings || [];
+    state.selected = 0;
+    renderGallery(state.batch);
+    renderSelection();
     setStatus("ready");
   } catch (error) {
     showError(error.message || String(error));
@@ -272,7 +287,8 @@ async function generate() {
 }
 
 function render(data) {
-  renderWarnings(data.warnings || []);
+  renderWarnings([...(data.warnings || []), ...state.batchWarnings]);
+  renderNotes(data.notes || []);
   renderMetrics(data);
   renderCloud(data);
   renderPersistence(data);
@@ -285,12 +301,96 @@ function render(data) {
 function renderWarnings(warnings) {
   const container = $("#warning-list");
   container.innerHTML = "";
-  for (const warning of warnings) {
+  const unique = [...new Set(warnings)];
+  for (const warning of unique) {
     const item = document.createElement("div");
     item.className = "warning";
     item.textContent = warning;
     container.appendChild(item);
   }
+}
+
+function renderNotes(notes) {
+  const container = $("#note-list");
+  container.innerHTML = "";
+  for (const note of [...new Set(notes)]) {
+    const item = document.createElement("div");
+    item.className = "note";
+    item.textContent = note;
+    container.appendChild(item);
+  }
+}
+
+function renderGallery(items) {
+  const container = $("#cloud-gallery");
+  container.innerHTML = "";
+  $("#gallery-count").textContent = `${items.length} cloud${items.length === 1 ? "" : "s"}`;
+  items.forEach((item, index) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "cloud-card";
+    card.dataset.index = String(index);
+    const title = document.createElement("div");
+    title.className = "cloud-card-title";
+    const name = document.createElement("strong");
+    name.textContent = item.sample.structure_name;
+    const betti = document.createElement("span");
+    betti.textContent = `b=(${item.persistence.betti.join(",")})`;
+    title.appendChild(name);
+    title.appendChild(betti);
+    const mini = document.createElement("div");
+    mini.className = "cloud-mini";
+    card.appendChild(title);
+    card.appendChild(mini);
+    card.addEventListener("click", () => {
+      state.selected = index;
+      renderSelection();
+    });
+    container.appendChild(card);
+    window.requestAnimationFrame(() => plotMiniCloud(mini, item));
+  });
+  updateGallerySelection();
+}
+
+function plotMiniCloud(element, item) {
+  if (!plotlyReady()) return;
+  const points = item.projection;
+  const trace = {
+    type: "scattergl",
+    mode: "markers",
+    x: points.map((point) => point[0]),
+    y: points.map((point) => point[1]),
+    marker: {
+      size: item.sample.n_points > 500 ? 1.6 : 2.3,
+      color: points.map((_, index) => index),
+      colorscale: [[0, "#60a5fa"], [0.5, "#5eead4"], [1, "#fb923c"]],
+      opacity: 0.85,
+    },
+    hoverinfo: "skip",
+  };
+  const layout = {
+    margin: { l: 0, r: 0, t: 0, b: 0 },
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor: "rgba(0,0,0,0)",
+    xaxis: { visible: false, fixedrange: true },
+    yaxis: { visible: false, fixedrange: true, scaleanchor: "x", scaleratio: 1 },
+    showlegend: false,
+  };
+  window.Plotly.newPlot(element, [trace], layout, { responsive: true, displayModeBar: false });
+}
+
+function updateGallerySelection() {
+  $$(".cloud-card").forEach((card, index) => {
+    card.classList.toggle("active", index === state.selected);
+  });
+}
+
+function renderSelection() {
+  if (!state.batch.length) return;
+  state.selected = Math.max(0, Math.min(state.selected, state.batch.length - 1));
+  state.last = state.batch[state.selected];
+  render(state.last);
+  updateGallerySelection();
 }
 
 function renderMetrics(data) {
@@ -302,8 +402,9 @@ function renderMetrics(data) {
   $("#metric-epsilon").textContent = Number(persistence.epsilon).toFixed(4);
   $("#metric-epsilon-note").textContent = "auto-selected filtration scale";
   $("#metric-structure").textContent = sample.structure_name;
+  const batchInfo = state.batch.length > 1 ? ` · cloud ${state.selected + 1}/${state.batch.length}` : "";
   $("#metric-counts").textContent =
-    `${sample.n_points} points · ${sample.n_components} components · genus ${sample.genus}`;
+    `${sample.n_points} points · ${sample.n_components} components · genus ${sample.genus}${batchInfo}`;
   $("#projection-method").textContent = data.projection_method;
 }
 

@@ -32,6 +32,12 @@
     </div>
   </header>
 
+  <nav class="topnav" aria-label="Primary">
+    <a class="nav-tab active" href="/">Data Studio</a>
+    <a class="nav-tab" href="/lab">Model Lab</a>
+    <a class="nav-tab" href="/lab#interpret">Interpretability</a>
+  </nav>
+
   <main class="layout">
     <aside class="panel sidebar">
       <div class="panel-heading">
@@ -77,6 +83,16 @@
           <label class="control span-2">
             <span>Seed</span>
             <input type="number" name="seed" id="seed" step="1" value="0">
+          </label>
+
+          <label class="control">
+            <span>Clouds in batch</span>
+            <input type="number" name="batch_count" id="batch-count" min="1" max="24" step="1" value="6">
+          </label>
+
+          <label class="control checkbox">
+            <input type="checkbox" name="mix_structures" id="mix-structures">
+            <span>Mix structures</span>
           </label>
         </div>
 
@@ -150,6 +166,20 @@
     <section class="content">
       <div id="error-banner" class="banner error hidden"></div>
       <div id="warning-list" class="warning-list"></div>
+      <div id="note-list" class="note-list"></div>
+
+      <article class="panel gallery-panel">
+        <div class="panel-heading compact">
+          <div>
+            <span class="eyebrow">BATCH</span>
+            <h2>Generated clouds</h2>
+          </div>
+          <span class="chip chip-mono" id="gallery-count">0 clouds</span>
+        </div>
+        <div id="cloud-gallery" class="cloud-gallery">
+          <div class="gallery-empty">Generate a batch to compare multiple point clouds.</div>
+        </div>
+      </article>
 
       <div class="metrics-grid">
         <article class="metric-card">

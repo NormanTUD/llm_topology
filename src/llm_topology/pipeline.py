@@ -31,6 +31,7 @@ def generate_dataset(spec: DatasetSpec) -> DatasetResponse:
         raise PipelineError(str(exc)) from exc
 
     warnings: list[str] = []
+    notes: list[str] = []
     warnings.extend(persistence.warnings)
     if spec.n_points > 2000:
         warnings.append(
@@ -41,9 +42,9 @@ def generate_dataset(spec: DatasetSpec) -> DatasetResponse:
     if spec.filtration.max_dim > 3:
         warnings.append("Homology dimensions above 3 are computationally expensive.")
     if sample.theoretical_betti != persistence.betti:
-        warnings.append(
-            "The computed PH label differs from the theoretical generator label. "
-            "This is expected for finite noisy samples and is part of the experiment."
+        notes.append(
+            "Generator and PH labels differ because the finite sample and filtration "
+            "see a different scale. Compare both; this is part of the experiment."
         )
     if spec.structure.value in {"klein_bottle", "mobius_strip"}:
         warnings.append(
@@ -74,6 +75,7 @@ def generate_dataset(spec: DatasetSpec) -> DatasetResponse:
         projection=projection,
         projection_method=projection_method,
         warnings=warnings,
+        notes=notes,
     )
 
 
