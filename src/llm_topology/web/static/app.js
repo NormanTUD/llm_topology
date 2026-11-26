@@ -302,7 +302,7 @@ function buildSpec() {
     points_per_component: optionalInt("points-per-component", 4, 2048),
     precision: clampInt($("#precision").value, 1, 8, 5),
     ambient_dim: clampInt($("#ambient-dim").value, 2, 64, 3),
-    copies: clampInt($("#copies").value, 1, 1000, 1),
+    copies: 1,
     copies_min: optionalInt("copies-min", 1, 1000),
     copies_max: optionalInt("copies-max", 1, 1000),
     genus: clampInt($("#genus").value, 1, 32, 2),
@@ -1157,8 +1157,6 @@ async function boot() {
   });
   $("#ambient-dim").addEventListener("input", updateDatasetBudget);
   $("#ambient-dim").addEventListener("change", updateDatasetBudget);
-  $("#copies").addEventListener("input", updateDatasetBudget);
-  $("#copies").addEventListener("change", updateDatasetBudget);
   $("#batch-structure-checks").addEventListener("change", onControlChange);
   $("#build-dataset").addEventListener("click", buildTrainingDataset);
   $("#top-generate").addEventListener("click", () => generate());

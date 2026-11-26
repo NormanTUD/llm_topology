@@ -99,6 +99,7 @@ Data Foundation:
 - Quick-Demo-Button fuer einen schnellen Torus-Durchlauf,
 - Default-Ziel ist nur `betti`, weitere Zielgruppen sind im Expert-Modus
   zuschaltbar,
+- Components min/max sind direkt sichtbar, Default 1–1,
 - Batch-Galerie mit mehreren Punktwolken,
 - Batch-Modus `single` oder `mix` mit expliziter Strukturauswahl,
 - Live-Update der Geometrie bei Regleränderungen,
@@ -166,7 +167,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **105 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **114 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -463,6 +464,7 @@ serverseitig gespeichert und nach F5 wiederhergestellt.
 - Quick-Demo-Button fuer einen schnellen Torus-Durchlauf,
 - Default-Ziel ist nur `betti`, weitere Zielgruppen sind im Expert-Modus
   zuschaltbar,
+- Components min/max sind direkt sichtbar, Default 1–1,
 - Batch-Galerie mit mehreren Punktwolken,
    - Auswahl einer Wolke für die Detailansicht,
    - Batch-Modus `single`/`mix`, Live-Update, Strukturauswahl,

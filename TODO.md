@@ -7,7 +7,7 @@
 - **Phase 1:** abgeschlossen (Custom Transformer + Training)
 - **Phase 2:** abgeschlossen (Probes + Heatmaps + Latent-PCA)
 - **Status:** Browser-GUI mit Data Studio, Model Lab und Interpretability
-- **Letzter Testlauf:** 105 Tests bestanden, Ruff und Formatierung sauber
+- **Letzter Testlauf:** 114 Tests bestanden, Ruff und Formatierung sauber
 - **Naechster Meilenstein:** OOD-/Invarianzmatrix, Ablation, Activation Patching
 
 Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
@@ -130,6 +130,10 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Quick-Demo-Preset
 - [x] Rollen-Workflows getestet (Demo, Beginner, ML, Topologie, Research)
 - [x] Analyse-Fallback bei zu kleinem Val-Split
+- [x] Components min/max im Simple-Modus sichtbar, Default 1-1
+- [x] Rollenbasierte GUI-Tests: Simple/Expert, Quick Demo, Components-Range
+- [x] Robustheitstests: Preflight, System-Snapshot, CUDA-Block, Zip-Slip
+- [x] Ende-zu-Ende-CLI-Test mit Config, Dataset, Training, job.json, Logs
 
 ## Phase 2 - Interpretierbarkeit
 
