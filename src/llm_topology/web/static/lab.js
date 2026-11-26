@@ -9,6 +9,7 @@ const labState = {
   runs: [],
   view: "train",
   running: false,
+  stopping: false,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -324,6 +325,7 @@ async function startTraining() {
     labState.job = job;
     labState.analysis = null;
     labState.running = true;
+    labState.stopping = false;
     persistLabState();
     renderJob(job);
     schedulePoll(250);
@@ -342,12 +344,15 @@ async function startTraining() {
 async function stopTraining() {
   if (!labState.jobId) return;
   const button = $("#train-toggle");
+  labState.stopping = true;
   button.disabled = true;
+  button.classList.add("danger");
   button.querySelector(".btn-label").textContent = "Stopping…";
   try {
     await fetchJSON(`/api/train/stop/${labState.jobId}`, { method: "POST" });
     toast("Stop requested");
   } catch (error) {
+    labState.stopping = false;
     toast(error.message, true);
     button.disabled = false;
     setTrainButton(labState.running);
@@ -381,6 +386,7 @@ async function pollStatus() {
     renderJob(job);
     if (["completed", "early_stopped", "stopped", "failed"].includes(job.status)) {
       window.clearTimeout(labState.pollTimer);
+      labState.stopping = false;
       setTrainButton(false);
       refreshRuns();
       return;
@@ -394,7 +400,15 @@ async function pollStatus() {
 
 function renderJob(job) {
   const running = ["queued", "preparing", "running"].includes(job.status);
-  setTrainButton(running);
+  if (running && labState.stopping) {
+    const button = $("#train-toggle");
+    button.disabled = true;
+    button.classList.add("danger");
+    button.querySelector(".btn-label").textContent = "Stopping…";
+  } else {
+    if (!running) labState.stopping = false;
+    setTrainButton(running);
+  }
   $("#run-status").textContent = job.status;
   $("#run-id").textContent = job.id ? `run ${job.id}` : "no run";
   $("#best-val").textContent = formatNumber(job.best_val_loss, 4);
@@ -573,6 +587,12 @@ function renderPredictionPairs(job) {
       generated.className = "prediction-condition";
       generated.textContent = `generated: ${prediction.generated_text}`;
       values.appendChild(generated);
+      if (prediction.generated_betti) {
+        const topology = document.createElement("div");
+        topology.className = "predicted";
+        topology.innerHTML = `<span class="label">generated PH</span> b=(${prediction.generated_betti.slice(0, 3).join(",")})`;
+        values.appendChild(topology);
+      }
     }
     card.appendChild(values);
     container.appendChild(card);
@@ -823,6 +843,10 @@ function renderProbeHeatmap(analysis) {
   const targets = Object.keys(probe.r2);
   const weights = probe.weights;
   const z = weights.map((row) => row.slice(0, 64));
+  if (!z.length || !z[0]?.length) {
+    $("#probe-heatmap").innerHTML = '<div class="plot-placeholder">No probe weights available.</div>';
+    return;
+  }
   const layout = plotlyLayout({
     margin: { l: 104, r: 12, t: 12, b: 34 },
     xaxis: { title: "neuron", gridcolor: "rgba(148,163,184,.06)" },
@@ -871,6 +895,10 @@ function renderLatent(analysis) {
   const names = projection.structure_names;
   const structureIds = projection.structure_ids;
   const dims = coords[0]?.length || 2;
+  if (!coords.length) {
+    $("#latent-plot").innerHTML = '<div class="plot-placeholder">No projection available.</div>';
+    return;
+  }
   const trace = {
     type: dims === 3 ? "scatter3d" : "scatter",
     mode: "markers",
@@ -909,6 +937,10 @@ function renderNeuronMap(analysis) {
   if (!plotlyReady()) return;
   $("#neuron-plot").innerHTML = "";
   const z = analysis.neuron_maps.normalized;
+  if (!z.length || !z[0]?.length) {
+    $("#neuron-plot").innerHTML = '<div class="plot-placeholder">No neuron map available.</div>';
+    return;
+  }
   const layout = plotlyLayout({
     margin: { l: 50, r: 12, t: 12, b: 34 },
     xaxis: { title: "neuron" },
@@ -931,6 +963,10 @@ function renderAttention(analysis) {
   const z = attention.map((layer) => layer[head] || []);
   const tokens = analysis.attention.tokens;
   const boundary = analysis.attention.boundary_index;
+  if (!z.length || !tokens || !tokens.length) {
+    $("#attention-plot").innerHTML = '<div class="plot-placeholder">No attention map available.</div>';
+    return;
+  }
   const layout = plotlyLayout({
     margin: { l: 50, r: 12, t: 12, b: 64 },
     xaxis: { title: "key token", tickfont: { size: 7 }, showticklabels: true },
@@ -962,6 +998,10 @@ function renderFFN(analysis) {
   if (!ffn || !ffn.length) return;
   const layer = intValue("ffn-layer", 0, 1024, ffn.length - 1);
   const values = ffn[layer] || [];
+  if (!values.length) {
+    $("#ffn-plot").innerHTML = '<div class="plot-placeholder">No FFN activation available.</div>';
+    return;
+  }
   const indices = values.map((_, index) => index);
   const order = indices.slice().sort((a, b) => Math.abs(values[b]) - Math.abs(values[a])).slice(0, 28);
   const traces = [
@@ -1193,8 +1233,9 @@ async function boot() {
       pollStatus();
     } else {
       const running = labState.runs.find((run) => ["preparing", "running", "queued"].includes(run.status));
-      if (running) {
-        labState.jobId = running.id;
+      const latest = running || labState.runs[labState.runs.length - 1];
+      if (latest) {
+        labState.jobId = latest.id;
         pollStatus();
       }
     }

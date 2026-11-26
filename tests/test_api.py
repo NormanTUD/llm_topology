@@ -84,9 +84,19 @@ def test_lab_page() -> None:
     assert "Training loss" in response.text
 
 
+def test_ui_state_roundtrip() -> None:
+    response = client.post("/api/ui-state", json={"test_marker": "ok"})
+    assert response.status_code == 200
+    assert response.json()["test_marker"] == "ok"
+    fetched = client.get("/api/ui-state")
+    assert fetched.status_code == 200
+    assert fetched.json()["test_marker"] == "ok"
+
+
 def test_training_routes_report_errors() -> None:
     assert client.get("/api/train/status/not-a-job").status_code == 404
     assert client.post("/api/analyze/not-a-job").status_code == 422
+    assert client.post("/api/predict/not-a-job", json={"count": 1}).status_code == 422
     invalid = {"data": {}, "model": {"n_layers": 0}, "training": {}}
     assert client.post("/api/train/start", json=invalid).status_code == 422
 

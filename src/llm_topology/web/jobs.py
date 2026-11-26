@@ -321,7 +321,13 @@ class JobManager:
                     eos_id=tokenizer.eos_id,
                 )
                 continuation = generated[0, len(prompt_ids) :].tolist()
-                predicted_text = tokenizer.decode(continuation).replace("<eos>", "").strip()
+                predicted_text = (
+                    tokenizer.decode(continuation)
+                    .replace("<eos>", "")
+                    .replace("<endoftext>", "")
+                    .replace("<pad>", "")
+                    .strip()
+                )
                 predicted_groups = None
                 parse_error = None
                 try:

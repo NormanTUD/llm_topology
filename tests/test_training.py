@@ -12,6 +12,7 @@ from llm_topology.model.config import (
     TrainConfig,
     TrainingSpec,
 )
+from llm_topology.model.data import build_dataset
 from llm_topology.model.train import Trainer
 from llm_topology.tokenizer import NumericTokenizer
 
@@ -56,6 +57,21 @@ def trained_run(tmp_path_factory) -> tuple[Path, object]:
         checkpoint_dir=directory / "run",
     )
     return directory, trainer.run()
+
+
+def test_training_target_order_matches_schema() -> None:
+    spec = _spec()
+    bundle = build_dataset(NumericTokenizer(), spec.data)
+    example = next(item for item in bundle.train if item.task == "infer")
+    assert [block.name for block in spec.data.target_schema.blocks] == [
+        "betti",
+        "ph",
+        "genus",
+        "n_components",
+        "filtration",
+    ]
+    assert example.target_groups[0] == [float(value) for value in example.betti]
+    assert example.target_groups[1] == [float(value) for value in example.ph]
 
 
 def test_training_saves_checkpoint_and_history(trained_run) -> None:

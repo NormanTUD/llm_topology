@@ -23,6 +23,9 @@ Modell**. Modell, Tokenizer, Initialisierung und Trainingsschleife werden
 projektspezifisch implementiert.
 
 Die Web-Oberfläche ist auf Englisch; Konzepte und Dokumentation sind deutsch.
+Die drei Ansichten laufen in einer Single-Page-App ohne Neuladen. UI-Zustand,
+letzte Batch-Generierung und Trainingslauf werden serverseitig gespeichert und
+nach F5 wiederhergestellt.
 
 ## Schnellstart
 
@@ -68,8 +71,8 @@ Data Foundation:
 - eigener Ziffern-/Zahlen-Tokenizer,
 - konfigurierbares Zielgruppen-Schema,
 - 12 Punktwolken-Generatoren,
-- Transformationen: Rotation, anisotrope Streckung, Twist, Translation,
-  Rauschen, Permutation,
+- Transformationen: Rotation, anisotrope Streckung, Twist, Shear, Bend,
+  Warp, Translation, Rauschen, Permutation,
 - Alpha-Komplex und Vietoris-Rips,
 - Persistenzdiagramme, Betti-Zahlen und Betti-Kurven,
 - automatische Wahl eines Filtrationsskalenpunkts,
@@ -87,7 +90,11 @@ Model Lab:
 - Cross-Entropy, Ranking/Kontrastivloss und Multiple-Choice-Evaluation,
 - AdamW/Adam/SGD, LR-Scheduler, Warmup, Early Stopping, Checkpoints,
 - CPU/CUDA/MPS-Erkennung, CPU-Default,
-- Live-Training im Browser mit Polling, Loss-Kurven und Samples.
+- Live-Training im Browser mit Polling, Batch-Loss-Kurven, Validierungspaaren
+  (Inputwolke, wahre vs. vorhergesagte Betti-Zahlen) und Samples,
+- Start/Stop als ein umschaltender Button,
+- Experimentordner `runs/exp-NNNN/` mit Checkpoints, Job-Snapshot und History,
+- CLI-Logging für Start, Epochen, Batches, Validierung und Checkpoints.
 
 Interpretability:
 
@@ -98,6 +105,7 @@ Interpretability:
 - Attention-Maps am Boundary-Token,
 - FFN-Neuronen-Aktivierungen,
 - PCA-Projektion der Residualstativen,
+- Test mit frisch generierten Punktwolken: true vs. predicted targets,
 - Trainingshistorie und Checkpoint-Verwaltung.
 
 Noch nicht enthalten:
@@ -109,7 +117,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **76 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **80 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -142,6 +150,11 @@ Betti-Zahlen. Deshalb unterscheidet das Projekt explizit:
 Beide Werte werden getrennt gespeichert und in der GUI verglichen. So sehen
 wir, ob das Modell die erzeugende Struktur oder nur die konkrete Stichprobe
 bzw. den Filtrationsradius gelernt hat.
+
+Zusätzlich zeigt das Data Studio eine kanonische Referenzwolke und
+Referenz-Betti-Zahlen als Ghost-Overlay. Diese Referenz ist ausdrücklich nur
+für den Menschen sichtbar und wird **nicht** in den Modell-Input oder die
+Trainingssequenz aufgenommen.
 
 Beispiele geschlossener orientierbarer Flächen vom Genus `g`:
 
@@ -205,6 +218,10 @@ Die Reihenfolge und Auswahl der Gruppen ist in der GUI konfigurierbar. Die
 Felder innerhalb einer Gruppe sind fest definiert. Das Modell lernt die
 Reihenfolge aus dem Trainingslauf; die GUI zeigt sie explizit an.
 
+Die Default-Reihenfolge im tatsächlichen Trainingsstring ist geprüft:
+`betti;ph;genus;n_components;filtration`. Ein Test in `tests/test_training.py`
+verhindert, dass diese Reihenfolge unbemerkt auseinanderläuft.
+
 Optional zuschaltbar sind `structure_id`, `n_points` und `ambient_dim`.
 `structure_id` ist ein numerischer Klassenindex.
 
@@ -250,9 +267,18 @@ Konfigurierbar:
 - Rotation,
 - anisotrope Streckung,
 - Twist,
+- Shear (invertierbar),
+- Bend (invertierbar),
+- glatter Warp (kleine Amplitude),
 - Translation,
 - Rauschen,
 - Punktpermutation.
+
+Shear, Bend und Twist sind als diffeomorphe Verzerrungen gedacht: Die ideale
+Topologie bleibt erhalten, die konkrete Punktwolke wird aber deutlich
+variiert. Rauschen ist separat und kann die PH-Signatur bewusst stören. Im
+Training steuert `Augment strength`, wie stark diese Transformationen
+zufällig angewendet werden.
 
 Es gibt keine kleinen künstlichen Obergrenzen. Ein lokales Safety-Envelope
 von 100.000 Punkten verhindert versehentliche OOM-Runs; oberhalb von 2.000
@@ -322,7 +348,9 @@ Das Modell wird **multitasking** trainiert:
 
 Default für CPU: 3 Layer, 4 Heads, `d_model=96`, FFN 384, Kontext 1024,
 32 Punkte, 3 Nachkommastellen. Das ist bewusst klein und schnell genug für
-interaktive Läufe. Alle Werte sind im Model Lab änderbar.
+interaktive Läufe. Alle Werte sind im Model Lab änderbar. Trainiert wird mit
+konfigurierbarer Batch-Größe; N Punktwolken werden also gleichzeitig als
+Batch verarbeitet, nicht als eine einzige Riesensequenz.
 
 Die bedingte Punktwolkengenerierung ist als reine Sequenzgenerierung mit
 Task-Token umgesetzt. Ein separater Decoder-Kopf bleibt eine spätere
@@ -359,26 +387,35 @@ Tests in Phase 3.
 
 Es gibt drei Browser-Ansichten:
 
-1. **Data Studio** (`/`)
+Alle drei Ansichten laufen in einer Single-Page-App; die Tab-Wechsel laden
+nicht neu. UI-Zustand, letzte Punktwolken-Batch und Trainingslauf werden
+serverseitig gespeichert und nach F5 wiederhergestellt.
+
+1. **Data Studio**
    - Batch-Galerie mit mehreren Punktwolken,
    - Auswahl einer Wolke für die Detailansicht,
-   - Strukturkatalog, Transformationen, Filtration und Zielgruppen,
-   - 3D-Punktwolke, Persistenzdiagramm, Betti-Kurven,
+   - Strukturkatalog, Transformationen inklusive Shear/Bend/Warp,
+   - kanonische Referenzwolke als Ghost-Overlay (nicht im Modell-Input),
+   - Filtration und Zielgruppen,
+   - 3D-Punktwolke, Persistenzdiagramm mit Referenz-Betti, Betti-Kurven,
    - theoretische vs. berechnete Betti-Zahlen,
    - Zielstring, Modell-Input und Tokenstrom,
    - Temml-Gleichungen mit Live-Werten.
 
-2. **Model Lab** (`/lab`)
+2. **Model Lab**
    - Dataset-, Modell- und Trainingsregler,
-   - Start/Stop, Live-Loss, Validierungsmetriken, Samples,
-   - Run-Historie und Checkpoints.
+   - Start/Stop-Toggle, Live-Batch-Loss, Validierungsmetriken,
+   - Live-Paare aus Inputwolke, wahrem Ziel und Modellvorhersage,
+   - generierte Punktwolken bzw. generierte PH-Betti,
+   - Run-Historie und Checkpoints unter `runs/exp-NNNN/`.
 
-3. **Interpretability** (`/lab#interpret`)
+3. **Interpretability**
    - Probe-Scores pro Layer,
    - Probe-Gewichts-Heatmap und Top-Neuronen,
    - PCA-Projektion des Residualstreams,
    - Layer × Neuron Heatmap,
-   - Attention-Map und FFN-Neuronen am Boundary-Token.
+   - Attention-Map und FFN-Neuronen am Boundary-Token,
+   - frische Multi-Cloud-Predictions mit true vs. predicted.
 
 Noch geplant: Invarianzmatrix, Ablation, Activation Patching, Equation
 Explorer und Uploads.
@@ -414,18 +451,25 @@ src/llm_topology/
     probes.py                   Probes, Attention, Neuronen, PCA
   web/
     main.py                     FastAPI
-    jobs.py                     Trainings-Jobmanager
-    templates/index.html        Data Studio mit Batch-Galerie
-    templates/lab.html          Model Lab + Interpretability
+    jobs.py                     Trainings-Jobmanager + Prediction
+    state.py                    Server-seitiger UI-Zustand
+    templates/index.html        Single-Page-App
+    templates/lab_body.html     Model Lab + Interpretability
     static/style.css            Dark-Lab-Design
+    static/shell.js             Tab-Routing ohne Reload
+    static/state.js             UI-Zustand speichern/laden
     static/app.js               Data-Studio-Interaktion
-    static/lab.js               Training, Polling, Probes
+    static/lab.js               Training, Polling, Probes, Predictions
 tests/                          pytest-Suite
 .github/workflows/ci.yml        GitHub Actions
 ```
 
 CI führt Ruff, Formatcheck und pytest aus. PyTorch wird über den CPU-Index
 installiert, damit der lokale Bootstrap ohne CUDA-Abhängigkeiten bleibt.
+
+Trainingsartefakte liegen unter `runs/exp-NNNN/` (`best.pt`, `last.pt`,
+`history.json`, `job.json`, optional `analysis.json`). `runs/` und `state/`
+sind gitignored. Der UI-Zustand wird unter `state/ui_state.json` gespeichert.
 
 ## Grenzen und Risiken
 

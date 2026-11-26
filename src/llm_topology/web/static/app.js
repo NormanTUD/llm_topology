@@ -555,6 +555,19 @@ function renderPersistence(data) {
     legend: { orientation: "h", y: 1.08, x: 0, font: { size: 9 } },
     xaxis: { title: "birth", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
     yaxis: { title: "death", gridcolor: "rgba(148,163,184,.08)", zeroline: false },
+    annotations: data.reference_betti?.length
+      ? [
+          {
+            x: 0.02,
+            y: 0.98,
+            xref: "paper",
+            yref: "paper",
+            text: `reference b=(${data.reference_betti.join(",")})`,
+            showarrow: false,
+            font: { color: "#8b9bb4", size: 9, family: "JetBrains Mono, monospace" },
+          },
+        ]
+      : [],
   });
   window.Plotly.newPlot(element, traces, layout, plotConfig());
 }

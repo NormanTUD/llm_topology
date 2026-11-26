@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 from ..config import StructureKind
 from ..pipeline import project_for_display
 from ..tokenizer import NumericTokenizer, parse_target_groups
+from ..topology.filtration import compute_persistence
 from .config import TrainingSpec
 from .data import DatasetBundle, TokenDataset, build_dataset, collate_examples
 from .transformer import TopologyTransformer
@@ -348,7 +349,13 @@ class Trainer:
                 eos_id=self.eos_id,
             )
             continuation = generated[0, len(example.prefix_ids) :].tolist()
-            predicted_text = self.tokenizer.decode(continuation).replace("<eos>", "").strip()
+            predicted_text = (
+                self.tokenizer.decode(continuation)
+                .replace("<eos>", "")
+                .replace("<endoftext>", "")
+                .replace("<pad>", "")
+                .strip()
+            )
             predicted_groups = None
             parse_error = None
             try:
@@ -390,11 +397,26 @@ class Trainer:
                 eos_id=self.eos_id,
             )
             continuation = generated[0, len(example.prefix_ids) :].tolist()
-            generated_text = self.tokenizer.decode(continuation).replace("<eos>", "").strip()
+            generated_text = (
+                self.tokenizer.decode(continuation)
+                .replace("<eos>", "")
+                .replace("<endoftext>", "")
+                .replace("<pad>", "")
+                .strip()
+            )
             generated_points = _parse_generated_points(generated_text, self.spec.data.ambient_dim)
             generated_projection, _ = (
                 project_for_display(generated_points) if generated_points else ([], "")
             )
+            generated_betti = None
+            if len(generated_points) >= 4:
+                try:
+                    generated_persistence = compute_persistence(
+                        generated_points, self.bundle.data_spec.filtration
+                    )
+                    generated_betti = generated_persistence.betti
+                except Exception:
+                    generated_betti = None
             samples.append(
                 {
                     "task": "generate",
@@ -402,6 +424,7 @@ class Trainer:
                     "condition_text": example.target_text,
                     "generated_text": generated_text,
                     "generated_projection": generated_projection,
+                    "generated_betti": generated_betti,
                     "true_text": example.target_text,
                 }
             )

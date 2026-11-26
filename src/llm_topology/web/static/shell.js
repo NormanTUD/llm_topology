@@ -7,7 +7,7 @@ function setView(view, { persist = true, labTab = null } = {}) {
   document.getElementById("data-view")?.classList.toggle("hidden", view !== "data");
   document.getElementById("lab-view")?.classList.toggle("hidden", view !== "lab");
   document.getElementById("nav-data")?.classList.toggle("active", view === "data");
-  document.getElementById("nav-lab")?.classList.toggle("active", view === "lab");
+  document.getElementById("nav-lab")?.classList.toggle("active", view === "lab" && labTab !== "interpret");
   document.getElementById("interpret-nav")?.classList.toggle("active", view === "lab" && labTab === "interpret");
   if (view === "lab" && labTab) {
     window.dispatchEvent(new CustomEvent("llm-lab-tab", { detail: labTab }));
@@ -19,7 +19,7 @@ function setView(view, { persist = true, labTab = null } = {}) {
 
 function locationView() {
   if (window.location.hash === "#interpret") return { view: "lab", labTab: "interpret" };
-  if (window.location.pathname.startsWith("/lab")) return { view: "lab", labTab: null };
+  if (window.location.pathname.startsWith("/lab")) return { view: "lab", labTab: "train" };
   return { view: "data", labTab: null };
 }
 
@@ -31,7 +31,7 @@ function bind() {
   });
   document.getElementById("nav-lab")?.addEventListener("click", (event) => {
     event.preventDefault();
-    setView("lab");
+    setView("lab", { labTab: "train" });
     history.replaceState(null, "", "/lab");
   });
   document.getElementById("interpret-nav")?.addEventListener("click", (event) => {

@@ -48,6 +48,35 @@ def test_custom_schema_and_max_dim() -> None:
     assert len(response.target_groups[1]) == 1
 
 
+def test_target_group_order_is_fixed_and_visible() -> None:
+    response = generate_dataset(DatasetSpec(structure=StructureKind.TORUS, n_points=80, seed=1))
+    names = [block.name for block in response.target_schema.blocks]
+    assert names == ["betti", "ph", "genus", "n_components", "filtration"]
+    assert response.target_groups[0] == [
+        float(value) for value in response.sample.theoretical_betti
+    ]
+    assert response.target_groups[1] == [float(value) for value in response.persistence.betti]
+    assert response.target_text.split(";")[0] == ",".join(
+        str(int(value)) for value in response.sample.theoretical_betti
+    )
+
+
+def test_reference_cloud_is_separate_from_model_sequence() -> None:
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.TORUS,
+            n_points=60,
+            seed=3,
+            transform={"twist": 0.2, "bend": 0.2, "warp": 0.1, "seed": 4},
+        )
+    )
+    assert response.reference_projection
+    assert response.reference_structure_name
+    assert response.reference_betti
+    assert "<endoftext>" in response.sequence
+    assert response.sequence.startswith("<") is False or response.sequence
+
+
 def test_optional_target_groups() -> None:
     schema = TargetSchema(
         blocks=[

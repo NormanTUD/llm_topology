@@ -7,7 +7,7 @@
 - **Phase 1:** abgeschlossen (Custom Transformer + Training)
 - **Phase 2:** abgeschlossen (Probes + Heatmaps + Latent-PCA)
 - **Status:** Browser-GUI mit Data Studio, Model Lab und Interpretability
-- **Letzter Testlauf:** 76 Tests bestanden, Ruff und Formatierung sauber
+- **Letzter Testlauf:** 80 Tests bestanden, Ruff und Formatierung sauber
 - **Naechster Meilenstein:** OOD-/Invarianzmatrix, Ablation, Activation Patching
 
 Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
@@ -82,6 +82,15 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Default-Modellgroesse fuer CPU festlegen
 - [x] Kontextlaenge, Koordinatenpraezision und Punktbudget kalibrieren
 - [x] CPU/CUDA/MPS-Erkennung
+- [x] Batch-Training mit N Punktwolken
+- [x] Verzerrungen (Shear/Bend/Warp/Twist) + Augmentationsstaerke
+- [x] Run-Ordner `runs/exp-NNNN` und CLI-Logging
+- [x] Live-Validierungspaare mit Inputwolke und true/predicted Betti
+- [x] Frische Multi-Cloud-Predictions im Browser
+- [x] Start/Stop-Toggle
+- [x] Single-Page-App ohne Reload
+- [x] Server-seitiger UI-Zustand + F5-Restore
+- [x] Referenzwolke nur fuer die GUI, nicht fuer das Modell
 
 ## Phase 2 - Interpretierbarkeit
 
