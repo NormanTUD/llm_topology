@@ -48,9 +48,9 @@ uv run app.py --no-browser --port 8000
 
 ## Aktueller Stand
 
-**Phase 0 - Data Foundation ist implementiert.**
+**Phase 0, Phase 1 und Phase 2 sind implementiert.**
 
-Enthalten:
+Data Foundation:
 
 - automatischer uv-Bootstrap über `python3 app.py`,
 - FastAPI-Server mit Browser-GUI,
@@ -63,22 +63,42 @@ Enthalten:
 - Persistenzdiagramme, Betti-Zahlen und Betti-Kurven,
 - automatische Wahl eines Filtrationsskalenpunkts,
 - Z2 und Z3 als Q-Proxy,
-- Live-3D-Punktwolke, Persistenzplot, Betti-Kurven, Zielvektor und
-  Tokenstrom,
-- Temml-gestützte Gleichungsansicht,
+- Batch-Galerie mit mehreren Punktwolken,
+- Temml-Gleichungsansicht,
 - pytest-Suite und GitHub-Actions-CI.
+
+Model Lab:
+
+- eigener Decoder-only-Transformer ohne Pretraining,
+- kontrollierbare Initialisierung und Architektur,
+- Multi-Task-Training: Inferenz, bedingte Punktwolkengenerierung und
+  auxiliäre Köpfe,
+- Cross-Entropy, Ranking/Kontrastivloss und Multiple-Choice-Evaluation,
+- AdamW/Adam/SGD, LR-Scheduler, Warmup, Early Stopping, Checkpoints,
+- CPU/CUDA/MPS-Erkennung, CPU-Default,
+- Live-Training im Browser mit Polling, Loss-Kurven und Samples.
+
+Interpretability:
+
+- Ridge-Probes für Betti/PH/Genus/Komponenten pro Layer,
+- logistische Probe für den Strukturtyp,
+- Probe-Gewichte und Top-Neuronen,
+- Neuron-Aktivierungs-Heatmaps,
+- Attention-Maps am Boundary-Token,
+- FFN-Neuronen-Aktivierungen,
+- PCA-Projektion der Residualstativen,
+- Trainingshistorie und Checkpoint-Verwaltung.
 
 Noch nicht enthalten:
 
-- das eigene Transformer-Modell,
-- Training, Checkpoints und Optimierer,
-- lineare Probes und Heatmaps,
-- Ablation und Activation Patching,
-- bedingte Punktwolkengenerierung,
-- Betti-Kurven als Trainingsziel,
-- exakte Q-Berechnung.
+- Ablation und Activation Patching (Phase 3),
+- OOD-/Invarianzmatrix (Phase 3),
+- Betti-Kurven/Persistenz als Trainingsziel (Phase 4),
+- exakte Q-Berechnung (Phase 4),
+- eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
+- interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **65 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **76 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 
@@ -265,73 +285,92 @@ Flächen sind die Werte gleich; für nicht-orientierbare Flächen zeigt Z3 das
 Q-Verhalten, aber Torsion kann in anderen Räumen abweichen. Exaktes Q ist
 für eine spätere Phase vorgesehen.
 
-## Geplantes Modell
+## Modell
 
-Vollständig eigener Decoder-only-Transformer:
+Implementiert ist ein vollständig eigener Decoder-only-Transformer:
 
 - kausale Self-Attention,
 - konfigurierbare Layer, Heads, `d_model`, FFN-Breite,
-- GELU oder SiLU/SwiGLU,
+- GELU, SiLU oder ReLU,
 - Pre- oder Post-LayerNorm,
-- gelernte Positionen oder RoPE,
+- gelernte Positionen, RoPE oder keine Positionsinformation,
 - eigene Initialisierung: Normal, Xavier, orthogonal, uniform, zero,
-  reproduzierbar über Seeds und pro Schicht überschreibbar,
+  reproduzierbar über Seeds,
 - keine vortrainierten Gewichte,
-- eigener Token-Embedding- und Ausgabekopf.
+- eigener Token-Embedding- und Ausgabekopf,
+- optionale Weight Ties.
 
-Das Modell wird von Anfang an **multitasking** trainiert:
+Das Modell wird **multitasking** trainiert:
 
-1. **Inferenz:** Punktwolke + `<endoftext>` + Zielgruppen.
-2. **Generierung:** Zielgruppen + `<endoftext>` + Punktwolke.
-3. **Auxiliäre Köpfe:** Strukturtyp, Genus, Komponenten, Betti-Zahlen.
-4. **Trainingsziele:** Cross-Entropy, Ranking/Kontrastivloss und
-   Multiple-Choice parallel.
+1. **Inferenz:** `<infer>` + Punktwolke + `<endoftext>` + Zielgruppen.
+2. **Generierung:** `<generate>` + Zielgruppen + `<endoftext>` + Punktwolke.
+3. **Auxiliäre Köpfe:** Strukturtyp, Genus, Komponenten, Betti-Zahlen,
+   PH-Betti-Zahlen.
+4. **Trainingsziele:** maskierte Cross-Entropy, auxiliäre MSE/CE,
+   Ranking/Kontrastivloss und Multiple-Choice-Evaluation.
 
-Die genaue Gewichtung und die Frage, ob Generierung zuerst nur als
-denoising-/autoencodingartige Aufgabe trainiert wird, ist eine
-Phase-1-Entscheidung.
+Default für CPU: 3 Layer, 4 Heads, `d_model=96`, FFN 384, Kontext 1024,
+32 Punkte, 3 Nachkommastellen. Das ist bewusst klein und schnell genug für
+interaktive Läufe. Alle Werte sind im Model Lab änderbar.
+
+Die bedingte Punktwolkengenerierung ist als reine Sequenzgenerierung mit
+Task-Token umgesetzt. Ein separater Decoder-Kopf bleibt eine spätere
+Alternative. Die genaue Gewichtung von CE, Auxiliary Loss und Ranking ist im
+Browser konfigurierbar. Frühe Epochen liefern oft noch keine brauchbaren
+Punktwolken; das ist sichtbar und Teil des Experiments.
 
 ## Interpretierbarkeit
 
-Geplant:
+Implementiert:
 
-- Ridge-/logistische Probes pro Layer und Token-Position,
-- Probe-Gewichte als Neuron × Zielgröße Heatmap,
-- Aktivierungs-Heatmaps Layer × Token und Layer × Neuron,
-- Attention-Maps mit Zuordnung zu Koordinaten und Punkten,
-- FFN-Neuronen-Aktivierungen pro Strukturklasse,
+- Ridge-Probes pro Layer und Boundary-Token für Betti, PH, Genus und
+  Komponenten,
+- logistische Probe für den Strukturtyp,
+- Probe-Gewichte als Ziel × Neuron Heatmap,
+- Top-Neuronen pro Ziel und Layer,
+- Aktivierungs-Heatmap Layer × Neuron,
+- Attention-Maps am Boundary-Token,
+- FFN-Neuronen-Aktivierungen am Boundary-Token,
+- PCA-Projektion der Residualstativen,
+- Layer-Auswahl, Head-Auswahl und Live-Heatmaps im Browser.
+
+Noch geplant:
+
 - Ablation einzelner Neuronen/Heads,
 - Activation Patching zwischen Strukturen und Transformationen,
-- PCA/UMAP-Projektionen des Residualstreams,
-- Trajektorien über Trainingsschritte.
+- UMAP/t-SNE,
+- kausale Karten und Invarianzmatrix.
 
-t-SNE/UMAP sind Visualisierungen, keine Beweise. Sie werden immer zusammen
-mit quantitativen Probes und kausalen Tests gezeigt.
+Probes zeigen Dekodierbarkeit, nicht kausale Nutzung. Deshalb folgen kausale
+Tests in Phase 3.
 
 ## GUI
 
-Die aktuelle Data-Studio-Ansicht bietet:
+Es gibt drei Browser-Ansichten:
 
-- Strukturkatalog und Live-Parameter,
-- Transformationsregler,
-- Filtrationseinstellungen,
-- konfigurierbare Zielgruppen,
-- 3D-Punktwolke (PCA-Projektion bei mehr als 3 Dimensionen),
-- Persistenzdiagramm,
-- Betti-Kurven,
-- theoretische vs. berechnete Betti-Zahlen,
-- kanonischen Zielstring und vollständigen Modell-Input,
-- Tokenstrom mit Token-IDs,
-- Temml-Gleichungen mit Live-Werten,
-- Warnungen und graceful Fehlerbehandlung.
+1. **Data Studio** (`/`)
+   - Batch-Galerie mit mehreren Punktwolken,
+   - Auswahl einer Wolke für die Detailansicht,
+   - Strukturkatalog, Transformationen, Filtration und Zielgruppen,
+   - 3D-Punktwolke, Persistenzdiagramm, Betti-Kurven,
+   - theoretische vs. berechnete Betti-Zahlen,
+   - Zielstring, Modell-Input und Tokenstrom,
+   - Temml-Gleichungen mit Live-Werten.
 
-Geplante Ansichten:
+2. **Model Lab** (`/lab`)
+   - Dataset-, Modell- und Trainingsregler,
+   - Start/Stop, Live-Loss, Validierungsmetriken, Samples,
+   - Run-Historie und Checkpoints.
 
-- Model Lab mit Architekturreglern und Parameterzahl,
-- Training-Dashboard mit Live-Loss und Checkpoints,
-- Interpretability-Dashboard mit Probes, Heatmaps, Attention und Ablation,
-- Evaluation mit OOD- und Invarianzmatrix,
-- interaktiver Equation Explorer.
+3. **Interpretability** (`/lab#interpret`)
+   - Probe-Scores pro Layer,
+   - Probe-Gewichts-Heatmap und Top-Neuronen,
+   - PCA-Projektion des Residualstreams,
+   - Layer × Neuron Heatmap,
+   - Attention-Map und FFN-Neuronen am Boundary-Token.
+
+Noch geplant: Invarianzmatrix, Ablation, Activation Patching, Equation
+Explorer und Uploads.
 
 ## Entwicklung
 
@@ -355,16 +394,27 @@ src/llm_topology/
     generators.py               Punktwolken-Generatoren
     filtration.py               Alpha/Rips, Diagramme, Betti-Kurven
     labels.py                   Zielgruppen und Schema
+  model/
+    config.py                   Modell-, Daten- und Trainingsconfig
+    transformer.py              Eigener Transformer + RoPE + Init
+    data.py                     Inferenz-/Generierungssequenzen
+    train.py                    Multi-Task-Training + Checkpoints
+  analysis/
+    probes.py                   Probes, Attention, Neuronen, PCA
   web/
     main.py                     FastAPI
-    templates/index.html        Data Studio
+    jobs.py                     Trainings-Jobmanager
+    templates/index.html        Data Studio mit Batch-Galerie
+    templates/lab.html          Model Lab + Interpretability
     static/style.css            Dark-Lab-Design
-    static/app.js               Interaktion und Plotly
+    static/app.js               Data-Studio-Interaktion
+    static/lab.js               Training, Polling, Probes
 tests/                          pytest-Suite
 .github/workflows/ci.yml        GitHub Actions
 ```
 
-CI führt Ruff, Formatcheck und pytest aus.
+CI führt Ruff, Formatcheck und pytest aus. PyTorch wird über den CPU-Index
+installiert, damit der lokale Bootstrap ohne CUDA-Abhängigkeiten bleibt.
 
 ## Grenzen und Risiken
 
@@ -378,24 +428,28 @@ CI führt Ruff, Formatcheck und pytest aus.
 - Endliche, verrauschte Stichproben haben keine saubere Topologie ohne
   Filtrationsentscheidung.
 - Punktpermutation ist bei sequenzieller Tokenisierung nicht automatisch
-  invariant; Permutationsaugmentation ist eingeplant.
+  invariant; die Trainingsdaten nutzen Permutationsaugmentation, der Effekt
+  muss aber separat gemessen werden.
 - Der Ziffern-Tokenizer erzeugt lange Sequenzen. 240 Punkte in 3D koennen
-  leicht 7.000+ Tokens ergeben. Kontextlaenge, Koordinatenpraezision und
-  Punktbudget muessen in Phase 1 gemeinsam kalibriert werden.
+  leicht 7.000+ Tokens ergeben. Die Defaults sind deshalb klein: 32 Punkte,
+  3 Nachkommastellen und Kontext 1024. Groessere Runs brauchen mehr Kontext
+  oder eine andere Koordinatenpraezision.
 - Die Genus-g-Punktwolke über verschmolzene Tori ist topologisch motiviert,
   aber die PH-Signatur kann durch die diskrete Oberfläche verrauscht sein.
 - Z3 ist nur ein Q-Proxy.
 
-## Nächste offene Entscheidungen für Phase 1
+## Nächste offene Entscheidungen für Phase 3
 
-1. Soll die bedingte Punktwolkengenerierung zuerst als reine
-   Sequenzgenerierung oder als separater Decoder-Kopf umgesetzt werden?
-2. Welche Default-Modellgröße ist auf CPU sinnvoll?
-3. Soll `structure_id` numerisch oder alphanumerisch tokenisiert werden?
-4. Soll die Trainingsreihenfolge der Zielgruppen frei permutierbar sein oder
-   pro Run fixiert bleiben?
-5. Wie wird exaktes Q für kleine Komplexe berechnet: rationale
+1. Welche Ablationsachse zuerst: Neuronen, Heads, Layer oder einzelne
+   Residualrichtungen?
+2. Soll Activation Patching zwischen Strukturen, Transformationen oder
+   Generator- vs. PH-Label laufen?
+3. Welche OOD-Achse ist Pflicht: Rotation, Stretch, Twist, Rauschen,
+   Punktanzahl, Ambient-Dimension oder ungesehene Genus-Werte?
+4. Soll die Invarianzmatrix pro Struktur oder pro Betti-Komponente
+   aggregiert werden?
+5. Sollen generierte Punktwolken automatisch topologisch ausgewertet und in
+   die Trainingsdiagnose aufgenommen werden?
+6. Wie wird exaktes Q für kleine Komplexe berechnet: rationale
    Gauß-Elimination, Gudhi-Erweiterung oder externe Bibliothek?
-6. Sollen benutzerdefinierte Python-Snippets über AST-Whitelists oder nur
-   als lokal vertrauenswürdiger Subprozess laufen?
 7. Welche Gleichungen müssen im Equation Explorer zuerst interaktiv werden?
