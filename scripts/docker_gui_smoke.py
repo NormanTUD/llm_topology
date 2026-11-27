@@ -227,6 +227,11 @@ async def run_gui(base_url: str, dataset_id: str) -> None:
 
     await click("#nav-lab", 0.8)
     check("dataset selector populated", bool(await evaluate('document.querySelector("#dataset-select").value')))
+    model_visible = await evaluate(
+        'Array.from(document.querySelectorAll("#train-controls details.section")).some(d => d.querySelector("summary")?.textContent.includes("Model") && getComputedStyle(d).display !== "none")'
+    )
+    check("model architecture controls available", bool(model_visible))
+    check("layers input available", bool(await evaluate('!!document.querySelector("#n-layers") && !!document.querySelector("#n-heads")')))
     check("preview dataset button", await click("#preview-dataset", 0.5) == "clicked")
     check("preview cards rendered", int(await evaluate('document.querySelectorAll("#dataset-preview .prediction-card").length') or 0) > 0)
     for split in ("val", "test"):
@@ -247,6 +252,9 @@ async def run_gui(base_url: str, dataset_id: str) -> None:
         ("#lr", 0.001),
     ):
         await set_value(selector, value)
+
+    estimate_text = await wait_for('document.querySelector("#train-plausibility").textContent.includes("tok/example") ? document.querySelector("#train-plausibility").textContent : ""', 20)
+    check("estimate includes tokens and batches", bool(estimate_text), str(estimate_text)[:180])
 
     await click("#train-toggle", 0.5)
     check("train toggle starts", await wait_for('["queued","preparing","running","completed"].includes(document.querySelector("#run-status").textContent) ? "yes" : ""', 20) == "yes")

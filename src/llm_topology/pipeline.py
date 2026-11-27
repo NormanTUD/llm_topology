@@ -94,7 +94,7 @@ def _reference_cloud(
     try:
         reference_spec = spec.model_copy(
             update={
-                "seed": 0,
+                "seed": spec.seed,
                 "transform": TransformSpec(seed=0),
             }
         )

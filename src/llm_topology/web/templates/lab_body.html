@@ -29,42 +29,42 @@
           <div class="dataset-meta" id="dataset-meta">No dataset selected. Build one in Data Studio first.</div>
         </details>
 
-        <details class="section expert-only">
+        <details class="section">
           <summary>Model <span class="summary-note">from scratch</span></summary>
           <div class="control-grid">
             <label class="control"><span>Layers</span><input type="number" id="n-layers" min="1" max="24" value="3"></label>
             <label class="control"><span>Heads</span><input type="number" id="n-heads" min="1" max="16" value="4"></label>
             <label class="control"><span>d_model</span><input type="number" id="d-model" min="8" max="1024" value="96"></label>
             <label class="control"><span>FFN width</span><input type="number" id="d-ff" min="8" max="4096" value="384"></label>
-            <label class="control"><span>Dropout</span><input type="number" id="dropout" min="0" max="0.8" step="0.01" value="0"></label>
-            <label class="control"><span>Activation</span><select id="activation"><option value="silu">SiLU</option><option value="gelu">GELU</option><option value="relu">ReLU</option></select></label>
-            <label class="control"><span>Norm</span><select id="norm-placement"><option value="pre">Pre-LN</option><option value="post">Post-LN</option></select></label>
-            <label class="control"><span>Positions</span><select id="position-encoding"><option value="learned">Learned</option><option value="rope">RoPE</option><option value="none">None</option></select></label>
+            <label class="control expert-only"><span>Dropout</span><input type="number" id="dropout" min="0" max="0.8" step="0.01" value="0"></label>
+            <label class="control expert-only"><span>Activation</span><select id="activation"><option value="silu">SiLU</option><option value="gelu">GELU</option><option value="relu">ReLU</option></select></label>
+            <label class="control expert-only"><span>Norm</span><select id="norm-placement"><option value="pre">Pre-LN</option><option value="post">Post-LN</option></select></label>
+            <label class="control expert-only"><span>Positions</span><select id="position-encoding"><option value="learned">Learned</option><option value="rope">RoPE</option><option value="none">None</option></select></label>
             <label class="control"><span>Context</span><input type="number" id="context-train" min="64" max="32768" value="1024"></label>
-            <label class="control"><span>Init</span><select id="init-scheme"><option value="normal">Normal</option><option value="xavier_uniform">Xavier uniform</option><option value="xavier_normal">Xavier normal</option><option value="orthogonal">Orthogonal</option><option value="uniform">Uniform</option><option value="zero">Zero</option></select></label>
-            <label class="control"><span>Init std</span><input type="number" id="init-std" step="0.001" min="0.0001" value="0.02"></label>
-            <label class="control"><span>Init seed</span><input type="number" id="init-seed" value="0"></label>
-            <label class="control checkbox"><input type="checkbox" id="tie-embeddings" checked><span>Tie embeddings</span></label>
-            <label class="control checkbox"><input type="checkbox" id="use-bias" checked><span>Use bias</span></label>
+            <label class="control expert-only"><span>Init</span><select id="init-scheme"><option value="normal">Normal</option><option value="xavier_uniform">Xavier uniform</option><option value="xavier_normal">Xavier normal</option><option value="orthogonal">Orthogonal</option><option value="uniform">Uniform</option><option value="zero">Zero</option></select></label>
+            <label class="control expert-only"><span>Init std</span><input type="number" id="init-std" step="0.001" min="0.0001" value="0.02"></label>
+            <label class="control expert-only"><span>Init seed</span><input type="number" id="init-seed" value="0"></label>
+            <label class="control checkbox expert-only"><input type="checkbox" id="tie-embeddings" checked><span>Tie embeddings</span></label>
+            <label class="control checkbox expert-only"><input type="checkbox" id="use-bias" checked><span>Use bias</span></label>
           </div>
         </details>
 
-        <details class="section expert-only">
+        <details class="section">
           <summary>Training <span class="summary-note">CPU friendly</span></summary>
           <div class="control-grid">
             <label class="control"><span>Epochs</span><input type="number" id="epochs" min="1" max="1000" value="6"></label>
             <label class="control"><span>Batch size</span><input type="number" id="batch-size" min="1" max="512" value="8"></label>
             <label class="control"><span>LR</span><input type="number" id="lr" step="0.0001" min="0.000001" value="0.0003"></label>
-            <label class="control"><span>Weight decay</span><input type="number" id="weight-decay" step="0.001" min="0" value="0.01"></label>
+            <label class="control expert-only"><span>Weight decay</span><input type="number" id="weight-decay" step="0.001" min="0" value="0.01"></label>
             <label class="control"><span>Optimizer</span><select id="optimizer"><option value="adamw">AdamW</option><option value="adam">Adam</option><option value="sgd">SGD</option></select></label>
-            <label class="control"><span>Warmup steps</span><input type="number" id="warmup" min="0" value="20"></label>
-            <label class="control"><span>Grad clip</span><input type="number" id="grad-clip" step="0.1" min="0" value="1"></label>
-            <label class="control"><span>Patience</span><input type="number" id="patience" min="1" value="3"></label>
-            <label class="control"><span>Seed</span><input type="number" id="train-seed" value="7"></label>
-            <label class="control"><span>Aux weight</span><input type="number" id="aux-weight" step="0.01" min="0" value="0.2"></label>
-            <label class="control"><span>Ranking weight</span><input type="number" id="ranking-weight" step="0.01" min="0" value="0.05"></label>
-            <label class="control"><span>MC negatives</span><input type="number" id="mc-negatives" min="1" max="16" value="2"></label>
-            <label class="control"><span>Max new tokens</span><input type="number" id="max-new-tokens" min="1" max="2048" value="80"></label>
+            <label class="control expert-only"><span>Warmup steps</span><input type="number" id="warmup" min="0" value="20"></label>
+            <label class="control expert-only"><span>Grad clip</span><input type="number" id="grad-clip" step="0.1" min="0" value="1"></label>
+            <label class="control expert-only"><span>Patience</span><input type="number" id="patience" min="1" value="3"></label>
+            <label class="control expert-only"><span>Seed</span><input type="number" id="train-seed" value="7"></label>
+            <label class="control expert-only"><span>Aux weight</span><input type="number" id="aux-weight" step="0.01" min="0" value="0.2"></label>
+            <label class="control expert-only"><span>Ranking weight</span><input type="number" id="ranking-weight" step="0.01" min="0" value="0.05"></label>
+            <label class="control expert-only"><span>MC negatives</span><input type="number" id="mc-negatives" min="1" max="16" value="2"></label>
+            <label class="control expert-only"><span>Max new tokens</span><input type="number" id="max-new-tokens" min="1" max="2048" value="80"></label>
             <label class="control"><span>Device</span><select id="device"><option value="auto">Auto</option><option value="cpu">CPU</option><option value="cuda">CUDA</option><option value="mps">MPS</option></select></label>
           </div>
         </details>
@@ -181,7 +181,7 @@
             <label class="control"><span>Count</span><input type="number" id="fresh-count" min="1" max="24" value="6"></label>
             <label class="control"><span>Points</span><input type="number" id="fresh-points" min="8" max="512" value="32"></label>
             <label class="control"><span>Ambient</span><input type="number" id="fresh-ambient" min="2" max="12" value="3"></label>
-            <label class="control"><span>Seed</span><input type="number" id="fresh-seed" value="100"></label>
+            <label class="control expert-only"><span>Seed</span><input type="number" id="fresh-seed" value="100"></label>
             <label class="control"><span>Structure</span><select id="fresh-structure"></select></label>
             <label class="control"><span>Filtration</span><select id="fresh-filtration-mode"><option value="auto">auto ε</option><option value="manual">manual ε</option></select></label>
             <label class="control"><span>Epsilon</span><input type="number" id="fresh-epsilon" step="0.01" min="0" value="0.5" disabled></label>

@@ -115,7 +115,9 @@ Data Foundation:
 - automatische Kontextvergrößerung im Dataset Builder, wenn das Token-Budget
   nicht passt,
 - serverseitige RAM-/VRAM-Plausibilitätschecks für Generierung, Dataset-Build
-  und Training inklusive Warnungen und Blockieren bei kritischen Settings,
+  und Training inklusive Warnungen und Blockieren bei kritischen Settings;
+  die Trainingsschätzung berücksichtigt Batch, Trainingsanzahl, Punkte,
+  Tokenlängen, Attention, Aktivierungen, Logits und Optimizer-Zustand,
 - Startup-Doctor mit Python/uv/Paket/RAM/Disk/GPU/Port/Config-Prüfungen und
   actionable Installations-/Fix-Hinweisen,
 - Headless-CLI mit Rich-Progress, `run.log`, `metrics.jsonl`, Checkpoints und
@@ -172,7 +174,7 @@ Noch nicht enthalten:
 - eigene Filtrationen, Formel-/SDF-Eingabe, Uploads (Phase 4),
 - interaktiver Equation Explorer (Phase 4).
 
-Aktueller Testlauf: **114 Tests bestanden**, Ruff und Formatierung sauber.
+Aktueller Testlauf: **116 Tests bestanden**, Ruff und Formatierung sauber.
 
 ## Wissenschaftliche Präzisierung
 

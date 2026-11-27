@@ -593,7 +593,8 @@ function renderCloud(data) {
     hovertemplate: "p %{pointNumber}<br>x %{x:.3f}<br>y %{y:.3f}<br>z %{z:.3f}<extra></extra>",
   }];
   const reference = data.reference_projection || [];
-  if (reference.length) {
+  const showReference = Boolean($("#show-reference")?.checked);
+  if (showReference && reference.length) {
     traces.push({
       type: use3d ? "scatter3d" : "scatter",
       mode: "markers",
@@ -629,9 +630,11 @@ function renderCloud(data) {
   window.Plotly.newPlot(element, traces, layout, plotConfig());
   const referenceChip = $("#reference-chip");
   if (referenceChip) {
-    referenceChip.textContent = data.reference_structure_name
-      ? `reference: ${data.reference_structure_name} (not model input)`
-      : "reference: —";
+    referenceChip.textContent = !showReference
+      ? "reference: hidden"
+      : data.reference_structure_name
+        ? `reference: ${data.reference_structure_name} (not model input)`
+        : "reference: —";
   }
 }
 
@@ -1180,6 +1183,10 @@ async function boot() {
   $("#ambient-dim").addEventListener("change", updateDatasetBudget);
   $("#batch-structure-checks").addEventListener("change", onControlChange);
   $("#build-dataset").addEventListener("click", buildTrainingDataset);
+  $("#show-reference").addEventListener("change", () => {
+    if (state.last) render(state.last);
+    persistDataState();
+  });
   $("#top-generate").addEventListener("click", () => generate());
   $("#quick-demo").addEventListener("click", quickDemo);
   $("#top-build-dataset").addEventListener("click", () => {

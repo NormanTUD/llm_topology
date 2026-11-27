@@ -35,6 +35,10 @@ class DatasetStore:
         dataset_id = self._next_id()
         directory = self.root / dataset_id
         directory.mkdir(parents=True, exist_ok=True)
+        all_examples = [*bundle.train, *bundle.val, *bundle.test]
+        token_lengths = [example.seq_len for example in all_examples]
+        point_counts = [len(example.points) for example in all_examples]
+        train_tokens = [example.seq_len for example in bundle.train]
         meta = {
             "id": dataset_id,
             "name": name.strip() or dataset_id,
@@ -45,6 +49,11 @@ class DatasetStore:
             "skipped": bundle.skipped,
             "max_dim": bundle.max_dim,
             "max_seq_len": data_spec.max_seq_len,
+            "max_example_tokens": max(token_lengths, default=0),
+            "avg_example_tokens": (sum(token_lengths) / len(token_lengths)) if token_lengths else 0,
+            "max_train_tokens": max(train_tokens, default=0),
+            "max_points": max(point_counts, default=0),
+            "avg_points": (sum(point_counts) / len(point_counts)) if point_counts else 0,
             "precision": data_spec.precision,
             "structures": [structure.value for structure in data_spec.structures],
             "target_schema": data_spec.target_schema.model_dump(mode="json"),

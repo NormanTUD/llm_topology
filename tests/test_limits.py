@@ -45,14 +45,46 @@ def test_training_estimate_blocks_huge_model() -> None:
         ),
         training=TrainConfig(batch_size=64, epochs=1),
     )
-    result = estimate_training(spec)
+    result = estimate_training(
+        spec,
+        dataset_meta={
+            "train_count": 64,
+            "max_example_tokens": 32768,
+            "max_points": 240,
+            "max_seq_len": 32768,
+        },
+    )
     assert result["level"] == "block"
     assert any("Attention" in warning for warning in result["warnings"])
 
 
+def test_training_estimate_uses_dataset_tokens_and_batches() -> None:
+    spec = TrainingSpec(
+        data=DataBuildSpec(max_seq_len=2048),
+        model=ModelSpec(max_seq_len=2048, n_layers=2, n_heads=4, d_model=64, d_ff=128),
+        training=TrainConfig(batch_size=4, epochs=1),
+    )
+    meta = {
+        "train_count": 10,
+        "max_example_tokens": 300,
+        "avg_example_tokens": 200.0,
+        "max_points": 40,
+        "avg_points": 30.0,
+        "max_seq_len": 512,
+    }
+    result = estimate_training(spec, dataset_meta=meta)
+    estimates = result["estimates"]
+    assert estimates["seq_len"] == 300
+    assert estimates["train_examples"] == 10
+    assert estimates["batches_per_epoch"] == 3
+    assert estimates["tokens_per_batch"] == 1200
+    assert estimates["max_points_per_example"] == 40
+    assert estimates["avg_tokens_per_example"] == 200.0
+
+
 def test_training_estimate_small_is_ok() -> None:
     spec = TrainingSpec(
-        data=DataBuildSpec(max_seq_len=512),
+        data=DataBuildSpec(max_seq_len=512, n_points=8, precision=2),
         model=ModelSpec(max_seq_len=512, n_layers=1, n_heads=2, d_model=32, d_ff=64),
         training=TrainConfig(batch_size=2, epochs=1),
     )

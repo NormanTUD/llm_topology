@@ -155,18 +155,39 @@ def estimate_training(
     dataset_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     model = spec.model
-    seq_len = model.max_seq_len
+    data = spec.data
+    train_examples = data.n_train
     if dataset_meta:
-        seq_len = int(dataset_meta.get("max_seq_len", seq_len))
-    seq_len = min(seq_len, model.max_seq_len)
+        train_examples = int(dataset_meta.get("train_count", train_examples))
+    max_tokens = int(dataset_meta.get("max_example_tokens", 0)) if dataset_meta else 0
+    if max_tokens <= 0:
+        estimated_tokens = data.n_points * data.ambient_dim * (data.precision + 3) + 96
+        max_tokens = estimated_tokens
+    avg_tokens = (
+        float(dataset_meta.get("avg_example_tokens", max_tokens))
+        if dataset_meta
+        else float(max_tokens)
+    )
+    max_points = (
+        int(dataset_meta.get("max_points", data.n_points)) if dataset_meta else data.n_points
+    )
+    avg_points = (
+        float(dataset_meta.get("avg_points", max_points)) if dataset_meta else float(max_points)
+    )
+    seq_len = min(max_tokens, model.max_seq_len)
     batch = spec.training.batch_size
+    batches_per_epoch = max(1, (train_examples + batch - 1) // batch)
+    tokens_per_batch = batch * seq_len
+    total_train_tokens = train_examples * seq_len
     vocab = 64
     attention = batch * model.n_heads * seq_len * seq_len
     activation = batch * seq_len * model.n_layers * (model.d_model * 4 + model.d_ff * 2)
     logits = batch * seq_len * vocab
+    embeddings = batch * seq_len * model.d_model
     params = model.n_layers * (12 * model.d_model**2 + 2 * model.d_model * model.d_ff)
     params += vocab * model.d_model * 2
-    bytes_needed = (attention + activation + logits) * 4 + params * 16
+    tensor_bytes = (attention + activation + logits + embeddings) * 4
+    bytes_needed = int((tensor_bytes + params * 16) * 1.15)
     available, memory_source = device_memory(spec.training.device)
     ratio = bytes_needed / max(available, 1)
     warnings: list[str] = []
@@ -185,6 +206,8 @@ def estimate_training(
         warnings.append(
             f"Dataset-Kontext {dataset_meta['max_seq_len']} > Modell-Kontext {model.max_seq_len}."
         )
+    if max_tokens > model.max_seq_len:
+        warnings.append(f"Laengste Tokenkette {max_tokens} > Modell-Kontext {model.max_seq_len}.")
     if attention > 1_000_000_000:
         warnings.append(
             f"Attention-Tensor ~{attention / 1e9:.2f} Mrd. Werte; das ist sehr speicherintensiv."
@@ -194,7 +217,9 @@ def estimate_training(
     if ratio >= 0.55:
         warnings.append(
             f"Geschaetzter Trainingsbedarf ~{bytes_needed / 1024**2:.0f} MiB "
-            f"bei ~{available / 1024**2:.0f} MiB verfuegbar ({memory_source})."
+            f"bei ~{available / 1024**2:.0f} MiB verfuegbar ({memory_source}). "
+            f"{train_examples} Trainingsketten, batch {batch}, "
+            f"max {max_tokens} Tokens/Kette, ~{tokens_per_batch} Tokens/Batch."
         )
     level = _level(ratio)
     if cuda_unavailable:
@@ -203,11 +228,21 @@ def estimate_training(
         level = "block"
     if dataset_meta and dataset_meta.get("max_seq_len", 0) > model.max_seq_len:
         level = "block"
+    if max_tokens > model.max_seq_len:
+        level = "block"
     return {
         "level": level,
         "warnings": warnings,
         "estimates": {
             "seq_len": seq_len,
+            "train_examples": train_examples,
+            "batches_per_epoch": batches_per_epoch,
+            "tokens_per_batch": tokens_per_batch,
+            "max_tokens_per_example": max_tokens,
+            "avg_tokens_per_example": avg_tokens,
+            "max_points_per_example": max_points,
+            "avg_points_per_example": avg_points,
+            "total_train_tokens": total_train_tokens,
             "batch_size": batch,
             "attention_elements": attention,
             "activation_elements": activation,
@@ -215,5 +250,7 @@ def estimate_training(
             "bytes": int(bytes_needed),
             "available_bytes": available,
             "memory_source": memory_source,
+            "optimizer_and_params_bytes": int(params * 16),
+            "activation_bytes": int(tensor_bytes),
         },
     }

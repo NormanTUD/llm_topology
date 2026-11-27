@@ -7,7 +7,7 @@
 - **Phase 1:** abgeschlossen (Custom Transformer + Training)
 - **Phase 2:** abgeschlossen (Probes + Heatmaps + Latent-PCA)
 - **Status:** Browser-GUI mit Data Studio, Model Lab und Interpretability
-- **Letzter Testlauf:** 114 Tests bestanden, Ruff und Formatierung sauber
+- **Letzter Testlauf:** 116 Tests bestanden, Ruff und Formatierung sauber
 - **Naechster Meilenstein:** OOD-/Invarianzmatrix, Ablation, Activation Patching
 
 Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
@@ -138,6 +138,9 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Docker-GUI-Smoke-Test mit Browser und echten Klicks
 - [x] Plotly/Temml lokal vendored fuer Offline-/Docker-Betrieb
 - [x] WebGL-loser 2D-Fallback fuer headless/CPU-Container
+- [x] Trainings-Estimate mit Batches, Punkten, Tokenketten und Strings
+- [x] Model-Layers/Heads im Simple-Modus sichtbar
+- [x] Docker-GUI-Test fuer Modellregler und Estimate-Details
 
 ## Phase 2 - Interpretierbarkeit
 

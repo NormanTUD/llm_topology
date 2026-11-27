@@ -56,6 +56,7 @@ def test_gui_contains_role_layout_and_component_range() -> None:
         'id="quick-demo"',
         'id="copies-min"',
         'id="copies-max"',
+        'id="show-reference"',
         'id="train-view"',
         'id="dataset-preview"',
         'id="top-run-analysis"',

@@ -70,6 +70,22 @@ def test_target_group_order_is_fixed_and_visible() -> None:
     )
 
 
+def test_reference_cloud_matches_component_count() -> None:
+    response = generate_dataset(
+        DatasetSpec(
+            structure=StructureKind.TORUS,
+            copies_min=2,
+            copies_max=2,
+            points_per_component=20,
+            ambient_dim=3,
+            seed=4,
+        )
+    )
+    assert len(response.reference_projection) == response.sample.n_points
+    assert response.reference_betti == response.sample.theoretical_betti
+    assert response.sample.n_components == 2
+
+
 def test_reference_cloud_is_separate_from_model_sequence() -> None:
     response = generate_dataset(
         DatasetSpec(

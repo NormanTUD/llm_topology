@@ -175,6 +175,8 @@ def test_dataset_api_roundtrip(monkeypatch, tmp_path) -> None:
     meta = response.json()
     assert meta["train_count"] == 4
     assert meta["test_count"] >= 2
+    assert meta["max_example_tokens"] > 0
+    assert meta["max_points"] >= 8
     assert any(item["id"] == meta["id"] for item in client.get("/api/datasets").json())
     preview = client.get(f"/api/datasets/{meta['id']}/preview?split=test&limit=2")
     assert preview.status_code == 200

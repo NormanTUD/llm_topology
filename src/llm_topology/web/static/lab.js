@@ -1255,11 +1255,28 @@ async function previewDataset() {
   }
 }
 
+function formatBytes(value) {
+  const n = Number(value) || 0;
+  if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(1)} GiB`;
+  return `${(n / 1024 ** 2).toFixed(0)} MiB`;
+}
+
 function renderTrainPlausibility(result) {
   const container = $("#train-plausibility");
   if (!container) return;
   container.innerHTML = "";
-  if (!result || !result.warnings?.length) return;
+  if (!result) return;
+  if (result.estimates) {
+    const e = result.estimates;
+    const info = document.createElement("div");
+    info.className = `plaus-item ${result.level === "block" ? "block" : result.level === "warn" ? "warn" : ""}`;
+    info.textContent =
+      `train ${e.train_examples} · batch ${e.batch_size} · ${e.batches_per_epoch} steps/epoch · ` +
+      `max ${e.max_tokens_per_example} tok/example · ~${e.tokens_per_batch} tok/batch · ` +
+      `${e.max_points_per_example} points/example · ~${formatBytes(e.bytes)} / ${formatBytes(e.available_bytes)} (${e.memory_source})`;
+    container.appendChild(info);
+  }
+  if (!result.warnings?.length) return;
   for (const warning of result.warnings) {
     const item = document.createElement("div");
     item.className = `plaus-item ${result.level === "block" ? "block" : result.level === "warn" ? "warn" : ""}`;
