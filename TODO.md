@@ -134,6 +134,10 @@ Legende: `[ ]` offen, `[~]` in Arbeit, `[x]` erledigt
 - [x] Rollenbasierte GUI-Tests: Simple/Expert, Quick Demo, Components-Range
 - [x] Robustheitstests: Preflight, System-Snapshot, CUDA-Block, Zip-Slip
 - [x] Ende-zu-Ende-CLI-Test mit Config, Dataset, Training, job.json, Logs
+- [x] Docker-Setup mit strikten CPU-/RAM-/PID-/SHM-Limits
+- [x] Docker-GUI-Smoke-Test mit Browser und echten Klicks
+- [x] Plotly/Temml lokal vendored fuer Offline-/Docker-Betrieb
+- [x] WebGL-loser 2D-Fallback fuer headless/CPU-Container
 
 ## Phase 2 - Interpretierbarkeit
 

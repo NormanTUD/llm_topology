@@ -123,6 +123,11 @@ Data Foundation:
 - Config-Export/Import (YAML/JSON) sowie Run- und Dataset-ZIP-Export/Import
   im Browser,
 - Slurm-Beispielskript unter `scripts/slurm_experiment.sbatch`,
+- Docker-Setup mit harten CPU-/RAM-/PID-/SHM-Limits,
+- Docker-GUI-Smoke-Test inklusive Browser, Buttons, Settings, Training und
+  Analyse,
+- Plotly und Temml lokal vendored, damit die Oberfläche auch ohne CDN
+  funktioniert,
 - Temml-Gleichungsansicht,
 - pytest-Suite und GitHub-Actions-CI.
 
@@ -546,6 +551,18 @@ tests/                          pytest-Suite
 
 CI führt Ruff, Formatcheck und pytest aus. PyTorch wird über den CPU-Index
 installiert, damit der lokale Bootstrap ohne CUDA-Abhängigkeiten bleibt.
+
+Docker:
+
+```bash
+docker compose build
+docker compose up -d app
+docker compose run --rm gui-test
+docker compose down
+```
+
+Die Container sind hart begrenzt: App 1 GiB RAM / 1 CPU, GUI-Test
+1,5 GiB RAM / 1,5 CPUs, zusätzlich PID- und Shared-Memory-Limits.
 
 Trainingsartefakte liegen unter `runs/exp-NNNN/` (`best.pt`, `last.pt`,
 `history.json`, `job.json`, optional `analysis.json`). Datasets liegen unter
